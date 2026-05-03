@@ -1,0 +1,955 @@
+{
+  "components": {
+    "schemas": {
+      "Attachment": {
+        "additionalProperties": false,
+        "description": "Attachment as it appears on an inbound or outbound envelope.\n\nURLs are always adapter-hosted on inbound (spec §7.3.1). For the outbound\n*input* shape (where the caller may supply a local file path instead of a\nURL), use :class:`SendAttachmentInput` on :class:`SendMessageRequest`.",
+        "properties": {
+          "id": {
+            "pattern": "^att_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "mime": {
+            "minLength": 1,
+            "title": "Mime",
+            "type": "string"
+          },
+          "size_bytes": {
+            "minimum": 0.0,
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "url": {
+            "description": "Adapter-hosted HTTP(S) URL.",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "mime",
+          "size_bytes",
+          "url"
+        ],
+        "title": "Attachment",
+        "type": "object"
+      },
+      "ChannelType": {
+        "description": "Channel topology. v1 returns only ``dm`` for iMessage; both for Discord.",
+        "enum": [
+          "dm",
+          "group"
+        ],
+        "title": "ChannelType",
+        "type": "string"
+      },
+      "Direction": {
+        "description": "Which way a message moved through AMC.",
+        "enum": [
+          "inbound",
+          "outbound"
+        ],
+        "title": "Direction",
+        "type": "string"
+      },
+      "Envelope": {
+        "additionalProperties": false,
+        "description": "Normalized cross-platform message envelope (spec §7.3.1).\n\nEvery inbound and outbound message conforms to this shape. New platforms\nare added by writing one connector that produces an :class:`Envelope`;\nnothing else in the system needs to change.",
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/Attachment"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "channel_id": {
+            "minLength": 1,
+            "title": "Channel Id",
+            "type": "string"
+          },
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType"
+          },
+          "direction": {
+            "$ref": "#/components/schemas/Direction"
+          },
+          "id": {
+            "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "raw": {
+            "additionalProperties": true,
+            "description": "Platform-native payload for debugging / forward-compat.",
+            "title": "Raw",
+            "type": "object"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Another msg_... id within the same channel, if threaded.",
+            "title": "Reply To"
+          },
+          "sender": {
+            "$ref": "#/components/schemas/Sender"
+          },
+          "source": {
+            "$ref": "#/components/schemas/Source"
+          },
+          "text": {
+            "description": "UTF-8; empty allowed for attachment-only.",
+            "title": "Text",
+            "type": "string"
+          },
+          "timestamp": {
+            "description": "Platform-claimed message time (RFC 3339 UTC).",
+            "title": "Timestamp",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_id",
+          "channel_type",
+          "direction",
+          "id",
+          "sender",
+          "source",
+          "text",
+          "timestamp"
+        ],
+        "title": "Envelope",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "MarkReadRequest": {
+        "description": "Body of ``POST /messages/mark_read`` (spec §7.4.4).",
+        "properties": {
+          "message_ids": {
+            "description": "Message ids to mark as read for the requesting agent.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Message Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "message_ids"
+        ],
+        "title": "MarkReadRequest",
+        "type": "object"
+      },
+      "MarkReadResponse": {
+        "description": "Response of ``POST /messages/mark_read`` (spec §7.4.4).",
+        "properties": {
+          "marked_count": {
+            "description": "Total number of unique ids submitted for marking. Per OQ-1 this is NOT the number of rows newly inserted; it is the count of ids the client asked us to mark, after de-duplication.",
+            "minimum": 0.0,
+            "title": "Marked Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "marked_count"
+        ],
+        "title": "MarkReadResponse",
+        "type": "object"
+      },
+      "SendAttachmentInput": {
+        "additionalProperties": false,
+        "description": "Outbound attachment supplied by the caller of ``POST /messages/send``.\n\nExactly one of ``url`` or ``path`` must be set per attachment.",
+        "properties": {
+          "mime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mime"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Local filesystem path.",
+            "title": "Path"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "HTTP(S) URL to fetch.",
+            "title": "Url"
+          }
+        },
+        "title": "SendAttachmentInput",
+        "type": "object"
+      },
+      "SendMessageRequest": {
+        "additionalProperties": false,
+        "description": "Input shape for ``POST /messages/send`` (spec §7.3.1, §5.1).\n\nThe adapter assigns ``id``, ``timestamp``, ``direction='outbound'``, and\nrewrites attachments to the canonical hosted form before persisting.",
+        "properties": {
+          "attachments": {
+            "items": {
+              "$ref": "#/components/schemas/SendAttachmentInput"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
+          "channel_id": {
+            "minLength": 1,
+            "title": "Channel Id",
+            "type": "string"
+          },
+          "reply_to": {
+            "anyOf": [
+              {
+                "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reply To"
+          },
+          "text": {
+            "description": "UTF-8; empty allowed for attachment-only.",
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "channel_id",
+          "text"
+        ],
+        "title": "SendMessageRequest",
+        "type": "object"
+      },
+      "Sender": {
+        "additionalProperties": false,
+        "description": "Sender identity carried inside the envelope (spec §7.3.1).",
+        "properties": {
+          "display_name": {
+            "description": "Allowlist override else platform value.",
+            "title": "Display Name",
+            "type": "string"
+          },
+          "id": {
+            "description": "Platform-native sender id.",
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "person_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present iff this sender is allowlisted with a person_id.",
+            "title": "Person Id"
+          }
+        },
+        "required": [
+          "display_name",
+          "id"
+        ],
+        "title": "Sender",
+        "type": "object"
+      },
+      "Source": {
+        "description": "Originating platform for a message.",
+        "enum": [
+          "discord",
+          "imessage"
+        ],
+        "title": "Source",
+        "type": "string"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "description": "Agent Messaging Channel adapter — a single-Mac REST surface that normalizes iMessage and Discord behind one bearer-protected API. All endpoints, including this OpenAPI document and the Swagger UI, require `Authorization: Bearer <token>` per spec §6.2 and §7.4.",
+    "title": "AMC Adapter",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/attachments/{attachment_id}": {
+      "get": {
+        "description": "Stream the bytes for ``attachment_id`` from the local re-host store.\n\nReturns 404 (``MESSAGE_NOT_FOUND`` — spec §7.4.12 has no dedicated\nattachment-not-found code; reusing the closest neighbour keeps the\nerror envelope shape stable) when the row is missing, the bytes\nhave been retention-deleted (``bytes_path IS NULL``), or the file\non disk is absent.",
+        "operationId": "get_attachment_attachments__attachment_id__get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "ULID-prefixed attachment id (``att_<26 Crockford-base32 chars>``).",
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "description": "ULID-prefixed attachment id (``att_<26 Crockford-base32 chars>``).",
+              "pattern": "^att_[0-9A-HJKMNP-TV-Z]{26}$",
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Attachment",
+        "tags": [
+          "attachments"
+        ]
+      }
+    },
+    "/messages/context": {
+      "get": {
+        "description": "``GET /messages/context`` — return chronologically ordered context.\n\nBearer + ``X-Agent-ID`` are enforced by the router-level ``dependencies``.\n``before`` and ``after`` are clamped at ``[0, 50]`` by Pydantic; values\noutside the range surface as the standard ``VALIDATION_FAILED`` envelope\nvia the global handler in :mod:`amc.core.errors`.",
+        "operationId": "get_messages_context_messages_context_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Agent-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Agent-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 50,
+              "minimum": 0,
+              "title": "After",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "around_message_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Around Message Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "default": 5,
+              "maximum": 50,
+              "minimum": 0,
+              "title": "Before",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "channel_id",
+            "required": true,
+            "schema": {
+              "minLength": 1,
+              "title": "Channel Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Messages Context"
+      }
+    },
+    "/messages/mark_read": {
+      "post": {
+        "description": "Mark each id in ``payload.message_ids`` as read for ``agent_id``.\n\nUPSERTs ``(message_id, agent_id, read_at=now)`` into ``message_reads``.\nThe composite PK on ``(message_id, agent_id)`` makes the operation\nidempotent at the row level; the response ``marked_count`` reports the\nnumber of unique ids the client submitted (OQ-1).\n\nNon-existent message ids are silently skipped at the storage layer (the\nFK on ``message_reads.message_id`` rejects them) but are still counted\nin ``marked_count`` because the client \"submitted them for marking\"\n(OQ-1 resolution).\n\nEmpty ``message_ids`` returns ``{marked_count: 0}`` without touching the\nDB.",
+        "operationId": "mark_read_messages_mark_read_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Agent-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Agent-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MarkReadRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkReadResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Mark messages as read for the requesting agent"
+      }
+    },
+    "/messages/quarantine": {
+      "get": {
+        "description": "Return inbound messages with ``allowlist_status='unknown'``.\n\nPer spec §7.4.8 the response shape is::\n\n    {\"messages\": [envelope, ...], \"next_since\": \"<iso8601>\"}\n\nOrdering is ``message_ts DESC`` (newest first) so operators see the most\nrecent quarantine entries first. ``next_since`` is the maximum\n``message_ts`` of returned envelopes, falling back to the input ``since``\n(or an empty string if ``since`` was also unset) on an empty result.",
+        "operationId": "list_quarantined_messages_messages_quarantine_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "Max envelopes to return (default 20, max 100).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Max envelopes to return (default 20, max 100).",
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "RFC 3339 timestamp; only return messages newer than this.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "RFC 3339 timestamp; only return messages newer than this.",
+              "title": "Since"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Quarantined Messages Messages Quarantine Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List quarantined (non-allowlisted) inbound messages",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/messages/send": {
+      "post": {
+        "description": "Validate, route, persist, and return the platform send result.\n\nThe handler does not return a Pydantic model directly because the\nidempotency replay path may have to swap in a previously-cached response\nbody verbatim — building a model only to immediately re-serialize would\nadd overhead and risk re-canonicalizing the cached payload differently.\n\nPer spec §7.4.5 the success body is::\n\n    {\"message_id\": \"msg_<ULID>\", \"sent_at\": \"2026-04-25T15:32:11.123Z\"}",
+        "operationId": "send_message_messages_send_post",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SendMessageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send an outbound message via the configured platform connector",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/messages/unread": {
+      "get": {
+        "description": "Return allowlisted messages this agent has not yet acknowledged.\n\nPer spec §7.4.1 the response shape is::\n\n    {\"messages\": [envelope, ...], \"next_since\": \"<iso8601>\"}\n\nwhere ``next_since`` is the maximum ``message_ts`` of returned envelopes,\nfalling back to the input ``since`` (or an empty string if ``since`` was\nalso unset) on an empty result.",
+        "operationId": "list_unread_messages_messages_unread_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Agent-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Agent-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "Filter by platform-native channel id.",
+            "in": "query",
+            "name": "channel_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by platform-native channel id.",
+              "title": "Channel Id"
+            }
+          },
+          {
+            "description": "Max envelopes to return (default 20, max 100).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "Max envelopes to return (default 20, max 100).",
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "RFC 3339 timestamp; only return messages newer than this.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "RFC 3339 timestamp; only return messages newer than this.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Filter by platform.",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Filter by platform.",
+              "title": "Source"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response List Unread Messages Messages Unread Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List unread messages for the requesting agent",
+        "tags": [
+          "messages"
+        ]
+      }
+    },
+    "/messages/{message_id}": {
+      "get": {
+        "description": "Return the single message identified by ``message_id``.\n\nVisibility rules:\n\n* ``allowlist_status='allowed'`` → visible (typical inbound).\n* ``allowlist_status='outbound'`` → visible (agent-sent).\n* ``allowlist_status='unknown'`` → hidden (return 404).\n* Row missing → 404.\n\nThe two \"not visible\" cases collapse to the same 404 envelope so the\ncaller cannot distinguish quarantined-but-present from truly-absent.",
+        "operationId": "get_message_messages__message_id__get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Agent-ID",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Agent-Id"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "description": "ULID-prefixed message id (``msg_<26 Crockford-base32 chars>``).",
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "description": "ULID-prefixed message id (``msg_<26 Crockford-base32 chars>``).",
+              "pattern": "^msg_[0-9A-HJKMNP-TV-Z]{26}$",
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Envelope"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Message"
+      }
+    }
+  }
+}

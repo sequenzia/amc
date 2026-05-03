@@ -1,0 +1,68 @@
+[project]
+name = "amc"
+version = "0.1.0"
+description = "Agent Messaging Channel — unified iMessage/Discord adapter for a single AI agent."
+authors = [
+    { name = "Stephen Sequenzia", email = "sequenzia@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "aiosqlite>=0.22.1",
+    "alembic>=1.18.4",
+    "discord-py>=2.7.1",
+    "fastapi>=0.136.1",
+    "httpx>=0.28.1",
+    "pydantic>=2",
+    "python-dotenv>=1.2.2",
+    "python-ulid>=3.1.0",
+    "sqlalchemy[asyncio]>=2.0.49",
+    "structlog>=25.5.0",
+    "uvicorn[standard]>=0.46.0",
+]
+
+[dependency-groups]
+dev = [
+    "hypothesis>=6.152.4",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.23.1",
+    "ruff>=0.7",
+    "websockets>=16.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.21,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = ""
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort
+    "B",    # flake8-bugbear
+    "UP",   # pyupgrade
+    "SIM",  # flake8-simplify
+]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]
