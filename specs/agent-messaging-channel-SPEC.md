@@ -211,7 +211,7 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 | Scenario | Input | Expected Behavior |
 |----------|-------|-------------------|
 | Allowlisted contact sends a long thread of 50 messages while adapter is restarting | 50 unprocessed rows in `chat.db` | On restart, all 50 are normalized in order (ASC by `ROWID`) and inserted; webhook fires for each |
-| Discord gateway disconnects mid-conversation | Gateway WS close | Library-level reconnect with backoff; resume from last sequence ID; missed messages are pulled via REST replay if supported, else accepted as a soft gap |
+| Discord gateway disconnects mid-conversation | Gateway WS close | Library-level reconnect with backoff; resume session via last sequence ID. v1 accepts any messages older than the gateway's resume buffer window as lost (soft gap); REST-poll replay is post-v1. |
 | Same contact messages on both platforms | iMessage + Discord, same `person_id` in allowlist | Both envelopes appear in `/messages/unread`; `identity_links` rows associate them with shared `person_id` |
 | iMessage attachment is a 50 MB video | chat.db row with attachment | Adapter copies binary into local store under attachment retention (90 days); envelope `attachments[].url` resolves to `/attachments/{id}` |
 | Mac sleeps for 6 hours | iMessage missed during sleep | On wake, poller detects ROWID jump, pulls all missed rows, fires webhooks in order |
@@ -240,7 +240,7 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 - [ ] Send completes within P95 < 2 s (platform ack to caller response).
 - [ ] An `Idempotency-Key` header (UUID) caches the response for 24 h; duplicate keys return the original response without re-sending.
 - [ ] Token-bucket rate limit (default 1 msg/s sustained, burst 5, per `channel_id`) enforced; over-limit returns `429` with `Retry-After`.
-- [ ] iMessage send: 3 retries with backoff before marking `send_failed`.
+- [ ] iMessage send: up to 4 total attempts (1 initial + 3 retries) with backoff before marking `send_failed`.
 - [ ] Discord send: respects discord.py rate-limit handling; 5xx retried with backoff.
 - [ ] Outbound messages are persisted in the same `messages` table with `direction='outbound'` (or equivalent flag) so context-replay sees the agent's own messages.
 
@@ -255,7 +255,7 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 | Agent retries with same `Idempotency-Key` after a successful send | Duplicate POST | Returns the original `{message_id, sent_at}` with header `Idempotency-Replayed: true` |
 | Agent retries with same key but different body | Duplicate key, different `text` | Returns `422 Unprocessable Entity` with `code=IDEMPOTENCY_KEY_REUSE` |
 | Send to non-allowlisted channel | New `channel_id` not seen before | Allowed; allowlist gates *inbound*, not outbound. Adapter logs the new channel |
-| AppleScript times out | osascript hangs > 10 s | Killed, retried up to 3 times, then `send_failed` |
+| AppleScript times out | osascript hangs > 10 s | Killed; up to 4 total attempts (1 initial + 3 retries), then `send_failed` |
 | Token bucket exhausted | 6th send to same channel within burst window | `429 Too Many Requests`, `Retry-After: <seconds>` |
 
 **Error Handling**:
@@ -386,7 +386,7 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 - [ ] Allowlist file at `~/.config/messaging-agent/allowlist.toml` is the source of truth.
 - [ ] Format includes: per-entry `source` (`imessage` or `discord`), `id` (handle, phone, email, or Discord user ID), `display_name` (optional override), `person_id` (optional, links cross-platform identities).
 - [ ] Adapter loads the file at startup.
-- [ ] `SIGHUP` reloads the file; in-flight messages use the version captured at message time.
+- [ ] `SIGHUP` reloads the file; in-flight messages use the version captured at message time. Allowlist resolution happens once per message at INSERT time: the resolved `sender_id`, `display_name`, `person_id`, and `allowlist_status` are persisted on the `messages` and `senders` rows and are **not** recomputed against later allowlist versions. (See OQ-4 for the related decision on whether existing quarantined messages migrate when a sender's status flips from `unknown` to `allowed`.)
 - [ ] Non-allowlisted inbound messages are stored in `messages` with `allowlist_status='unknown'`; never returned from `/messages/unread`, `/messages/{id}`, or `/messages/context`.
 - [ ] `GET /messages/quarantine` lists `unknown`-status messages (paginated).
 - [ ] `identity_links` rows are derived from `person_id` groupings on adapter load.
@@ -485,7 +485,9 @@ display_name = "Bob"
 - MCP wrapper passes the bearer token from its env on every adapter call.
 - Webhook outbound carries `X-AMC-Signature: sha256=<hex>` HMAC over the raw body; receiver verifies with constant-time compare.
 
-#### Authorization
+#### Authorization (Conventional Use — not enforced in v1)
+
+The table below describes the **intended** division of responsibilities. The single bearer token grants both roles equally; there is no server-side role check. `X-Agent-ID` is for per-agent cursor isolation, not auth.
 
 | Role | Permissions |
 |------|-------------|
@@ -513,7 +515,7 @@ There is no role separation enforced by token in v1: a single bearer token grant
 - **RTO**: ≤ 5 minutes after Mac wake or process crash (launchd auto-restart).
 - **RPO**: zero for inbound — connectors maintain durable cursors that survive restarts. Webhook delivery is at-least-once with dead-lettering.
 - **Webhook retry policy**: 5 attempts, exponential backoff at ~1s, 5s, 30s, 2m, 10m. Then `dead`.
-- **Send retry policy**: 3 attempts on iMessage AppleScript failure with backoff; library defaults on Discord 5xx.
+- **Send retry policy**: iMessage AppleScript — up to 4 total attempts (1 initial + 3 retries) with backoff; library defaults on Discord 5xx.
 
 ### 6.5 Accessibility Requirements
 
@@ -648,9 +650,9 @@ Fields:
 
 - `id` (string, ULID prefix `msg_`): adapter-issued.
 - `source` (`imessage` | `discord`).
-- `channel_id` (string): platform-namespaced. iMessage uses E.164 phone or Apple ID email; Discord uses `discord:<dm|channel>:<id>`.
+- `channel_id` (string): platform-native identifier. iMessage uses E.164 phone or Apple ID email; Discord uses `discord:<dm|channel>:<id>`. Cross-platform uniqueness is enforced by the composite primary key `(source, channel_id)` on the `channels` table (§7.3.2), so iMessage IDs do not need an `imessage:` prefix.
 - `channel_type` (`dm` | `group`): v1 returns only `dm` for iMessage; both for Discord.
-- `sender.id` (string): platform-namespaced.
+- `sender.id` (string): platform-native identifier. Cross-platform uniqueness is enforced by the composite primary key `(source, sender_id)` on the `senders` table (§7.3.2).
 - `sender.display_name` (string): allowlist override else platform value.
 - `sender.person_id` (string | null): present iff this sender is allowlisted with a `person_id`.
 - `text` (string): UTF-8.
@@ -689,15 +691,15 @@ erDiagram
         json raw_json
     }
     CHANNELS {
+        string source PK
         string channel_id PK
-        string source
         string channel_type
         string last_seen_message_id
         json metadata_json
     }
     SENDERS {
+        string source PK
         string sender_id PK
-        string source
         string display_name
         string allowlist_status
         string person_id
@@ -756,13 +758,13 @@ erDiagram
 |-------|------|-------------|-------------|
 | `id` | TEXT | PK | ULID with `msg_` prefix |
 | `source` | TEXT | NOT NULL CHECK IN ('imessage','discord') | Platform |
-| `channel_id` | TEXT | NOT NULL, FK → `channels` | Platform-namespaced |
+| `channel_id` | TEXT | NOT NULL, FK → `channels(source, channel_id)` (composite, with `source` above) | Platform-native ID |
 | `channel_type` | TEXT | NOT NULL CHECK IN ('dm','group') | DM or group |
-| `sender_id` | TEXT | NOT NULL, FK → `senders` | Platform-namespaced |
+| `sender_id` | TEXT | NOT NULL, FK → `senders(source, sender_id)` (composite, with `source` above) | Platform-native ID |
 | `text` | TEXT | NOT NULL | UTF-8; empty string allowed for attachment-only messages |
 | `reply_to` | TEXT | NULL, FK → `messages.id` (deferred) | Threaded parent |
 | `direction` | TEXT | NOT NULL CHECK IN ('inbound','outbound') | Direction through AMC |
-| `allowlist_status` | TEXT | NOT NULL CHECK IN ('allowed','unknown','outbound') | `outbound` for messages we sent |
+| `allowlist_status` | TEXT | NOT NULL CHECK IN ('allowed','unknown','outbound') | Denormalized snapshot of `senders.allowlist_status` at INSERT time. `'outbound'` is reserved for agent-sent messages where allowlisting doesn't apply. The `senders` row is the source of truth (see below). |
 | `message_ts` | TEXT (ISO 8601) | NOT NULL | Platform-claimed timestamp |
 | `created_at` | TEXT (ISO 8601) | NOT NULL DEFAULT now | Adapter-side ingest time |
 | `attachments_json` | TEXT | NULL | JSON array (denormalized for fast read) |
@@ -808,9 +810,88 @@ erDiagram
 
 **Indexes**: `idx_idem_expires (expires_at)` for sweeper.
 
+##### `channels`
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `source` | TEXT | PK part 1, CHECK IN ('imessage','discord') | Platform |
+| `channel_id` | TEXT | PK part 2 | Platform-native ID (E.164/email for iMessage; `discord:<dm\|channel>:<id>` for Discord) |
+| `channel_type` | TEXT | NOT NULL CHECK IN ('dm','group') | DM or group |
+| `last_seen_message_id` | TEXT | NULL, FK → `messages.id` (deferred) | Most recent message in channel |
+| `metadata_json` | TEXT | NULL | Platform-specific metadata (server/guild ID, channel name, etc.) |
+
+**Indexes**: PK is the only required index in v1.
+
+##### `senders`
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `source` | TEXT | PK part 1, CHECK IN ('imessage','discord') | Platform |
+| `sender_id` | TEXT | PK part 2 | Platform-native ID |
+| `display_name` | TEXT | NOT NULL | Allowlist override else platform value |
+| `allowlist_status` | TEXT | NOT NULL CHECK IN ('allowed','unknown') | **Source of truth** for sender trust. Set from allowlist load; `'outbound'` does not apply here (only on `messages`). |
+| `person_id` | TEXT | NULL | Cross-platform identity link; references `identity_links.person_id` |
+| `first_seen` | TEXT (ISO 8601) | NOT NULL DEFAULT now | First time this sender appeared |
+| `last_seen` | TEXT (ISO 8601) | NOT NULL DEFAULT now | Last time this sender messaged us |
+
+**Indexes**: `idx_senders_person (person_id)` for cross-platform lookups.
+
+##### `identity_links`
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `person_id` | TEXT | PK part 1 | Stable cross-platform identifier from allowlist |
+| `source` | TEXT | PK part 2, CHECK IN ('imessage','discord') | Platform |
+| `sender_id` | TEXT | PK part 3, FK → `senders(source, sender_id)` | Platform-native ID |
+
+**Indexes**: PK covers the common access path (`person_id` → all linked senders).
+
+**Notes**: Materialized at adapter startup from the allowlist file's `person_id` groupings. Refreshed on `SIGHUP`. A `person_id` shared by N entries produces N rows.
+
+##### `attachments`
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `id` | TEXT | PK | ULID with `att_` prefix |
+| `message_id` | TEXT | NOT NULL, FK → `messages.id` | Owning message |
+| `mime` | TEXT | NOT NULL | MIME type (best-effort detection if not provided by platform) |
+| `size_bytes` | INTEGER | NOT NULL | Byte length of stored bytes |
+| `bytes_path` | TEXT | NULL | Local filesystem path; NULL after retention sweep deletes the bytes |
+| `original_url_or_path` | TEXT | NULL | Source URL (Discord CDN) or chat.db attachment path, preserved for forensics |
+| `created_at` | TEXT (ISO 8601) | NOT NULL DEFAULT now | Re-host time |
+
+**Indexes**: `idx_attachments_message (message_id)`, `idx_attachments_created (created_at)` for the retention sweeper.
+
+##### `connector_state`
+
+| Field | Type | Constraints | Description |
+|-------|------|-------------|-------------|
+| `source` | TEXT | PK, CHECK IN ('imessage','discord') | Platform (one row per connector) |
+| `cursor` | TEXT | NOT NULL | Connector-specific cursor: iMessage stores last processed `ROWID` (decimal string); Discord stores last gateway sequence ID and resume gateway URL as JSON |
+| `updated_at` | TEXT (ISO 8601) | NOT NULL DEFAULT now | Last cursor update |
+
+**Indexes**: PK is the only required index.
+
+**Notes**: Cursor updates are committed in the same transaction as the corresponding `messages` INSERT to guarantee at-least-once processing across restarts.
+
 ### 7.4 API Specifications
 
-All endpoints require `Authorization: Bearer <token>`. Reading endpoints additionally require `X-Agent-ID: <name>` (where noted). Bind: `127.0.0.1:8080` by default. Body is JSON unless otherwise stated.
+All endpoints require `Authorization: Bearer <token>`. Read endpoints that filter by allowlist visibility additionally require `X-Agent-ID: <name>`. Bind: `127.0.0.1:8080` by default. Body is JSON unless otherwise stated.
+
+**Header requirements summary**:
+
+| Endpoint | Bearer | `X-Agent-ID` | `Idempotency-Key` |
+|----------|--------|--------------|-------------------|
+| `GET /messages/unread` (§7.4.1) | required | required | — |
+| `GET /messages/{id}` (§7.4.2) | required | required | — |
+| `GET /messages/context` (§7.4.3) | required | required | — |
+| `POST /messages/mark_read` (§7.4.4) | required | required | — |
+| `POST /messages/send` (§7.4.5) | required | — | recommended |
+| `POST /typing` (§7.4.6) | required | — | — |
+| `GET /messages/quarantine` (§7.4.8) | required | — | — |
+| `GET /attachments/{id}` (§7.4.9) | required | — | — |
+| `GET /healthz` (§7.4.10) | required | — | — |
+| `GET /openapi.json`, `GET /docs` | required | — | — |
 
 #### 7.4.1 `GET /messages/unread`
 
@@ -848,11 +929,15 @@ X-Agent-ID: claude-code
 
 **Purpose**: Fetch one message by id. Allowlist filter applies.
 
-**Response**: `200 OK` with envelope or `404 NOT_FOUND`.
+**Authentication**: Bearer + `X-Agent-ID` required (the `messages.{id}` lookup applies allowlist visibility, like `/messages/unread`).
+
+**Response**: `200 OK` with envelope, or `404` with `code=MESSAGE_NOT_FOUND` (see §7.4.12 standard error envelope).
 
 #### 7.4.3 `GET /messages/context`
 
 **Purpose**: N messages around a target.
+
+**Authentication**: Bearer + `X-Agent-ID` required.
 
 **Request**:
 ```http
@@ -869,12 +954,13 @@ X-Agent-ID: claude-code
 
 **Purpose**: Mark message ids as read for the requesting agent.
 
+**Authentication**: Bearer + `X-Agent-ID` required. `Idempotency-Key` is **not** required (UPSERT semantics make this endpoint naturally idempotent).
+
 **Request**:
 ```http
 POST /messages/mark_read
 Authorization: Bearer {token}
 X-Agent-ID: claude-code
-Idempotency-Key: 0d2f...
 Content-Type: application/json
 
 { "message_ids": ["msg_01HXYZ...", "msg_01HABC..."] }
@@ -890,6 +976,8 @@ Content-Type: application/json
 #### 7.4.5 `POST /messages/send`
 
 **Purpose**: Send a message to a channel.
+
+**Authentication**: Bearer required. `X-Agent-ID` is not required (sends are not allowlist-filtered, and outbound rows are not subject to per-agent read state). `Idempotency-Key` is recommended; duplicate keys return the cached response per §5.2.
 
 **Request**:
 ```http
@@ -917,13 +1005,16 @@ Content-Type: application/json
 { "message_id": "msg_01HXYZ...", "sent_at": "2026-04-25T15:32:13Z" }
 ```
 
-`429` — `code=RATE_LIMITED` with `Retry-After`.
+`404` — `code=CHANNEL_NOT_FOUND` if `channel_id` is not registered. No retry (per §5.2 error handling).
 `422` — `code=IDEMPOTENCY_KEY_REUSE` if key has been used with a different body.
+`429` — `code=RATE_LIMITED` with `Retry-After`.
 `502` — `code=PLATFORM_SEND_FAILED` after retries exhausted.
 
 #### 7.4.6 `POST /typing`
 
 **Purpose**: Best-effort typing indicator emit.
+
+**Authentication**: Bearer required.
 
 **Request**: `{"channel_id": "..."}`. **Response**: `204 No Content`.
 
@@ -942,17 +1033,23 @@ These four tools are exposed by the MCP wrapper and map 1:1 to the REST endpoint
 
 **Purpose**: Operator review of non-allowlisted inbound messages.
 
+**Authentication**: Bearer required (operator endpoint; `X-Agent-ID` not used here — quarantine review is global, not per-agent).
+
 **Response**: `{messages: [envelope-with-allowlist_status='unknown'], next_since}`.
 
 #### 7.4.9 `GET /attachments/{id}`
 
 **Purpose**: Serve re-hosted attachment bytes.
 
+**Authentication**: Bearer required.
+
 **Response**: `200 OK` with bytes and correct `Content-Type`. `404` if missing or retention-deleted.
 
 #### 7.4.10 `GET /healthz`
 
 **Purpose**: Liveness + connector states + queue depths.
+
+**Authentication**: Bearer required.
 
 **Response**:
 ```json
@@ -1139,7 +1236,7 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 
 ## 9. Implementation Plan
 
-### 9.0 Pre-Phase 0 — Spike POC (~half day)
+### 9.0 Phase 0 — Spike POC (~half day)
 
 **Completion Criteria**: A standalone Python script that, on the target Mac, reads the last 5 rows from `~/Library/Messages/chat.db` and successfully sends a hardcoded message to a known iMessage contact via `osascript`. Confirms FDA and Automation prompts have been navigated.
 
@@ -1422,19 +1519,23 @@ None. This is a single-operator project.
 |------|------------|
 | Adapter | The Python+FastAPI process that owns SQLite, runs the connectors, and serves the REST API |
 | Allowlist | TOML file listing trusted senders; non-listed senders are quarantined |
+| `chat.guid` | The `chat.guid` column from `chat.db`'s `chat` table; stable identifier for an iMessage conversation, used by the AppleScript send target |
 | Connector | Per-platform component that translates platform-native messages into the normalized envelope and back |
 | Envelope | The normalized cross-platform message shape (§7.3.1) |
 | FDA | Full Disk Access — the macOS Privacy & Security grant required to read `chat.db` |
+| HMAC | Hash-based Message Authentication Code; AMC uses HMAC-SHA256 for webhook body signatures (`X-AMC-Signature`) |
 | Idempotency-Key | UUID header on non-idempotent POSTs; lets the adapter dedupe retries |
 | MCP | Model Context Protocol — the agent-to-tool standard the wrapper implements |
 | MCP wrapper | Thin TypeScript layer translating MCP tool calls into adapter HTTP calls |
 | Per-agent cursor | Read-state model where each `X-Agent-ID` has its own view of "unread" |
 | `person_id` | Optional allowlist field that links the same human across platforms |
 | Quarantine | Storage state for non-allowlisted inbound messages — saved but invisible to agents |
+| RFC 3339 | The internet-profile of ISO 8601 used for all timestamps in AMC (e.g., `2026-04-25T15:32:11Z`) |
 | ROWID | SQLite implicit row identifier; the iMessage poller's cursor |
 | Soak | A multi-day unattended run validating real-world stability |
 | Tapback | iMessage's six fixed reactions (love, like, dislike, laugh, emphasis, question); future work |
 | Token bucket | Rate-limit algorithm with steady refill rate and a burst capacity |
+| ULID | Universally Unique Lexicographically Sortable Identifier — 26-char base32 ID that sorts by creation time; AMC uses ULIDs (with type prefixes like `msg_`, `att_`) for all primary keys |
 | WAL | SQLite Write-Ahead Logging journal mode; required for concurrent reader/writer access |
 | Webhook | The adapter's outbound POST to a configured URL on every new allowlisted inbound message |
 

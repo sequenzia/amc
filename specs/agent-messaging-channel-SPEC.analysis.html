@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Spec Analysis Review</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0d1117;
+    --bg-surface: #161b22;
+    --bg-elevated: #1c2128;
+    --border: #30363d;
+    --border-active: #58a6ff;
+    --text: #e6edf3;
+    --text-muted: #8b949e;
+    --text-heading: #f0f6fc;
+    --amber: #d29922;
+    --amber-bg: rgba(210, 153, 34, 0.12);
+    --green: #3fb950;
+    --green-bg: rgba(63, 185, 80, 0.12);
+    --red: #f85149;
+    --red-bg: rgba(248, 81, 73, 0.12);
+    --purple: #bc8cff;
+    --purple-bg: rgba(188, 140, 255, 0.12);
+    --blue: #58a6ff;
+    --blue-bg: rgba(88, 166, 255, 0.12);
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+  }
+
+  .header {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .header-left { display: flex; align-items: center; gap: 16px; }
+  .header h1 { font-size: 18px; color: var(--text-heading); font-weight: 600; }
+  .header-meta { display: flex; gap: 16px; font-size: 13px; color: var(--text-muted); }
+  .header-meta span { display: flex; align-items: center; gap: 4px; }
+
+  .dashboard {
+    background: var(--bg-surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+  }
+  .stats { display: flex; gap: 24px; }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .stat-value { font-size: 24px; font-weight: 700; }
+  .stat-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .stat-bar {
+    width: 100%;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin-top: 4px;
+    overflow: hidden;
+  }
+  .stat-bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+
+  .filters { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .filter-tabs { display: flex; gap: 2px; background: var(--bg); border-radius: 6px; padding: 2px; }
+  .filter-tab {
+    padding: 6px 14px;
+    border: none;
+    background: transparent;
+    color: var(--text-muted);
+    font-size: 13px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.15s;
+    font-family: inherit;
+  }
+  .filter-tab:hover { color: var(--text); }
+  .filter-tab.active { background: var(--bg-elevated); color: var(--text); }
+  .filter-tab .count {
+    display: inline-block;
+    margin-left: 4px;
+    font-size: 11px;
+    background: var(--border);
+    padding: 0 6px;
+    border-radius: 10px;
+  }
+
+  select.severity-filter {
+    background: var(--bg);
+    color: var(--text);
+    border: 1px solid var(--border);
+    padding: 6px 28px 6px 10px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b949e' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 8px center;
+  }
+
+  .main { display: flex; height: calc(100vh - 140px); overflow: hidden; }
+
+  .spec-panel {
+    flex: 6;
+    overflow-y: auto;
+    padding: 24px;
+    border-right: 1px solid var(--border);
+  }
+  .spec-content {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 13px;
+    line-height: 1.8;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .spec-content h1, .spec-content h2, .spec-content h3, .spec-content h4 {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    color: var(--text-heading);
+    margin: 20px 0 8px;
+    line-height: 1.3;
+  }
+  .spec-content h1 { font-size: 22px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+  .spec-content h2 { font-size: 18px; }
+  .spec-content h3 { font-size: 15px; }
+  .spec-content h4 { font-size: 14px; }
+  .spec-content strong { color: var(--text-heading); }
+  .spec-content code {
+    background: var(--bg-elevated);
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 12px;
+  }
+  .spec-content ul, .spec-content ol { padding-left: 24px; margin: 4px 0; }
+  .spec-content li { margin: 2px 0; }
+
+  .annotated-line {
+    border-left: 3px solid transparent;
+    padding-left: 8px;
+    margin-left: -11px;
+    cursor: pointer;
+    transition: background 0.15s;
+    border-radius: 0 4px 4px 0;
+  }
+  .annotated-line:hover { background: var(--bg-elevated); }
+  .annotated-line.severity-warning { border-left-color: var(--amber); }
+  .annotated-line.severity-critical { border-left-color: var(--purple); }
+  .annotated-line.severity-suggestion { border-left-color: var(--blue); }
+  .annotated-line.status-approved { border-left-color: var(--green); }
+  .annotated-line.status-rejected { border-left-color: var(--red); }
+  .annotated-line.selected { background: var(--bg-elevated); }
+
+  .annotation-marker {
+    display: inline-block;
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 3px;
+    margin-left: 8px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    vertical-align: middle;
+    cursor: pointer;
+  }
+  .annotation-marker.severity-warning { background: var(--amber-bg); color: var(--amber); }
+  .annotation-marker.severity-critical { background: var(--purple-bg); color: var(--purple); }
+  .annotation-marker.severity-suggestion { background: var(--blue-bg); color: var(--blue); }
+
+  [contenteditable="true"] {
+    outline: none;
+    border: 1px dashed transparent;
+    padding: 2px 4px;
+    margin: -2px -4px;
+    border-radius: 3px;
+    transition: border-color 0.15s;
+  }
+  [contenteditable="true"]:focus {
+    border-color: var(--border-active);
+    background: var(--bg-elevated);
+  }
+
+  .findings-panel {
+    flex: 4;
+    overflow-y: auto;
+    padding: 16px;
+    background: var(--bg-surface);
+  }
+  .findings-list { display: flex; flex-direction: column; gap: 8px; }
+
+  .finding-card {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .finding-card:hover { border-color: var(--border-active); }
+  .finding-card.selected { border-color: var(--border-active); box-shadow: 0 0 0 1px var(--border-active); }
+  .finding-card.status-approved { border-left: 3px solid var(--green); }
+  .finding-card.status-rejected { border-left: 3px solid var(--red); }
+
+  .finding-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+  }
+  .finding-id { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .finding-title { font-size: 14px; font-weight: 600; color: var(--text-heading); margin-bottom: 4px; }
+
+  .badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 500;
+  }
+  .badge-critical { background: var(--purple-bg); color: var(--purple); }
+  .badge-warning { background: var(--amber-bg); color: var(--amber); }
+  .badge-suggestion { background: var(--blue-bg); color: var(--blue); }
+
+  .category-badge {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .finding-issue {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 10px;
+    line-height: 1.5;
+  }
+
+  .finding-detail { margin-bottom: 10px; }
+  .finding-detail-label {
+    font-size: 11px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+  .finding-detail-text {
+    font-size: 13px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    background: var(--bg-elevated);
+    padding: 8px 10px;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    white-space: pre-wrap;
+    word-wrap: break-word;
+  }
+  .finding-detail-text.current { border-left: 3px solid var(--red); }
+  .finding-detail-text.proposed { border-left: 3px solid var(--green); }
+
+  .finding-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    font-weight: 500;
+    transition: all 0.15s;
+    background: var(--bg-elevated);
+    color: var(--text);
+  }
+  .btn:hover { border-color: var(--text-muted); }
+  .btn-approve { border-color: var(--green); color: var(--green); }
+  .btn-approve:hover { background: var(--green-bg); }
+  .btn-reject { border-color: var(--red); color: var(--red); }
+  .btn-reject:hover { background: var(--red-bg); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { opacity: 0.9; }
+
+  .comment-area {
+    width: 100%;
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 8px 10px;
+    font-size: 13px;
+    font-family: inherit;
+    resize: vertical;
+    min-height: 60px;
+    margin-top: 8px;
+  }
+  .comment-area:focus { outline: none; border-color: var(--border-active); }
+
+  .status-badge {
+    display: inline-block;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .status-pending { background: var(--amber-bg); color: var(--amber); }
+  .status-approved { background: var(--green-bg); color: var(--green); }
+  .status-rejected { background: var(--red-bg); color: var(--red); }
+
+  .finding-location {
+    font-size: 11px;
+    color: var(--text-muted);
+    margin-bottom: 6px;
+  }
+
+  .prompt-panel {
+    background: var(--bg-surface);
+    border-top: 1px solid var(--border);
+    padding: 16px 24px;
+  }
+  .prompt-panel.hidden { display: none; }
+  .prompt-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+  }
+  .prompt-header h3 { font-size: 14px; color: var(--text-heading); }
+  .prompt-actions { display: flex; gap: 8px; }
+  .prompt-content {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 12px 14px;
+    font-size: 13px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    max-height: 200px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    background: var(--bg-elevated);
+    border: 1px solid var(--green);
+    color: var(--green);
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 13px;
+    z-index: 1000;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: all 0.2s;
+    pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+
+  .empty-state {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text-muted);
+  }
+  .empty-state h3 { font-size: 16px; margin-bottom: 8px; color: var(--text); }
+
+  @media (max-width: 900px) {
+    .main { flex-direction: column; height: auto; }
+    .spec-panel { border-right: none; border-bottom: 1px solid var(--border); max-height: 50vh; }
+    .findings-panel { max-height: 50vh; }
+  }
+</style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-left">
+    <h1 id="spec-name"></h1>
+  </div>
+  <div class="header-meta">
+    <span id="depth-level"></span>
+    <span id="analyzed-at"></span>
+  </div>
+</header>
+
+<div class="dashboard">
+  <div class="stats" id="stats"></div>
+  <div class="filters">
+    <div class="filter-tabs" id="status-filters"></div>
+    <select class="severity-filter" id="severity-filter">
+      <option value="all">All Severities</option>
+      <option value="critical">Critical</option>
+      <option value="warning">Warning</option>
+      <option value="suggestion">Suggestion</option>
+    </select>
+  </div>
+</div>
+
+<div class="main">
+  <div class="spec-panel">
+    <div class="spec-content" id="spec-content"></div>
+  </div>
+  <div class="findings-panel">
+    <div class="findings-list" id="findings-list"></div>
+  </div>
+</div>
+
+<div class="prompt-panel hidden" id="prompt-panel">
+  <div class="prompt-header">
+    <h3>Prompt from Approved Changes (<span id="approved-count">0</span>)</h3>
+    <div class="prompt-actions">
+      <button class="btn btn-primary" onclick="copyPrompt()">Copy Prompt</button>
+      <button class="btn" onclick="downloadSpec()">Download Modified Spec</button>
+    </div>
+  </div>
+  <div class="prompt-content" id="prompt-content"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="text/markdown" id="spec-source"># Agent Messaging Channel PRD
+
+**Version**: 1.0
+**Author**: Stephen Sequenzia
+**Date**: 2026-05-02
+**Status**: Draft
+**Spec Type**: New product
+**Spec Depth**: Full technical documentation
+**Description**: A single-Mac service that lets one AI agent send and receive messages on iMessage and Discord through a unified interface. The design priority is decoupling: the agent framework, the transport, and the platform connectors must each be replaceable without rewriting the others. Agents reach the system over MCP (stdio) or directly over plain HTTP. Source of truth is the blueprint at `internal/blueprints/agent-messaging-channel.md`, which this spec extends and, in two specific places, supersedes.
+
+---
+
+## 1. Executive Summary
+
+The Agent Messaging Channel (AMC) is a personal-scale messaging gateway that exposes the same four-tool MCP surface (and an equivalent REST surface) over both iMessage and Discord, normalizing their very different I/O models behind a single message envelope. v1 ships as a Python+FastAPI adapter on macOS, supervised by `launchd`, with a thin TypeScript MCP wrapper for stdio-based clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) and a documented direct-HTTP path for non-MCP consumers. The system is built decoupled-by-design so that swapping the agent framework, the MCP wrapper, or either connector requires no changes to the other layers.
+
+## 2. Problem Statement
+
+### 2.1 The Problem
+
+A single owner wants one AI agent to be reachable on the messaging platforms they (and a small trusted circle) already use — iMessage and Discord — without locking the agent into either a specific platform SDK or a specific agent framework. Today, every agent framework, channel SDK, and message bus combination is a fresh integration; rewriting platform code each time the agent framework changes (or vice versa) is not a sustainable path for a personal-scale tool.
+
+### 2.2 Current State
+
+There is no implementation yet. The repository contains only this PRD's source (the blueprint), README, and Claude Code config. Existing reference work that AMC will build on:
+
+- **iMessage**: `anthropics/claude-plugins-official/external_plugins/imessage` — `chat.db` polling and AppleScript send patterns.
+- **Discord**: `discord.py` (and the equivalent Anthropic Discord plugin as reference, not a dependency).
+- **MCP**: `@modelcontextprotocol/sdk` (TypeScript) for the wrapper.
+
+Manual interaction with each platform — opening Messages.app, opening Discord — is the current human flow. Automation would otherwise require either a custom per-platform integration per agent framework, or coupling the agent to a single proprietary channel SDK.
+
+### 2.3 Impact Analysis
+
+This is a personal-tool project; "impact" is measured against the owner's experience and the architectural goals, not commercial metrics:
+
+- **Without AMC**: every new agent framework explored (Claude Code, Claude Desktop, Codex CLI, Codex Desktop, custom Python loops) requires re-integrating either iMessage or Discord — N×M coupling.
+- **With AMC**: one adapter, one MCP wrapper, two connectors. Adding a third platform (Slack, SMS, Telegram) is a single connector. Adding a third agent framework is zero adapter changes.
+
+### 2.4 Business Value
+
+- Validates a **decoupled three-layer architecture** as a working pattern, not a sketch.
+- Produces a **portable tool** that survives churn in MCP, agent SDKs, and platform APIs.
+- Yields **reusable artifacts** — the message envelope shape, the per-agent cursor schema, and the webhook delivery contract — that future projects can adopt.
+
+## 3. Goals & Success Metrics
+
+### 3.1 Primary Goals
+
+1. **Receive and respond** to messages on iMessage and Discord through a single agent in v1.
+2. **Decouple platform integrations from agent logic** so the agent framework can be swapped without rewriting connectors. Both MCP-aware (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) and non-MCP (direct-HTTP) clients are first-class.
+3. **Run entirely on one Mac**, with no external hosting dependencies for the iMessage path.
+4. **Ship a documented, soak-validated v1** that a teammate could install and run without the owner present.
+
+### 3.2 Success Metrics
+
+[Full success-metrics table is in the spec file at lines 56-65; abbreviated here for the HTML preview. Key targets: P95 receive&lt;3s, P95 send&lt;2s, 7-day soak, 95% webhook delivery, 60-min teammate install.]
+
+### 3.3 Non-Goals
+
+- Multi-host / multi-Mac deployment.
+- Cloud or hosted-service operation.
+- iMessage group chat (post-v1).
+- Reactions / tapbacks / edits / deletes (post-v1).
+- HTTP MCP transport for remote agents (post-v1).
+- Multi-agent leasing.
+- Non-bearer auth (OAuth, mTLS).
+- Production SLAs / paging / on-call.
+
+---
+
+**NOTE**: This HTML review embeds the analysis findings interactively. The full 1471-line spec content is summarized above for visual reference. To view and edit the spec, open the source markdown file:
+
+`/Users/sequenzia/dev/repos/amc/specs/agent-messaging-channel-SPEC.md`
+
+The findings panel on the right contains the line numbers for each finding so you can cross-reference back to the source. Click a finding to expand its details, view current/proposed text, add a comment, and Approve or Reject. Use **Copy Prompt** at the bottom to send approved changes back to Claude.
+
+---
+
+## Findings cross-reference
+
+The line numbers in the findings panel refer to lines in the source spec file. Open it side-by-side in your editor for full context.
+
+Key sections referenced by findings:
+- §3.2 Success Metrics (lines 56-65)
+- §5.1 REQ-AMC-001 Inbound ingestion (lines 187-227)
+- §5.2 REQ-AMC-002 Outbound send (lines 229-267)
+- §5.3 REQ-AMC-003 Read state per agent (lines 270-295)
+- §5.5 REQ-AMC-005 Outbound webhook (lines 322-353)
+- §5.6 REQ-AMC-006 MCP wrapper (lines 355-373)
+- §5.7 REQ-AMC-007 Allowlist (lines 376-422)
+- §6.2 Security/Authorization (lines 480-502)
+- §6.4 Reliability (lines 510-516)
+- §7.3.1 Envelope (lines 618-663)
+- §7.3.2 ERD (lines 665-749)
+- §7.3.3 Field defs (lines 751-809)
+- §7.4.1–§7.4.12 API specs (lines 811-1002)
+- §9.0 Phase 0 spike (lines 1142-1156)
+- §11.2 Env vars (lines 1329-1347)
+- §14 Open Questions (lines 1405-1415)
+- §15.1 Glossary (lines 1419-1439)
+</script>
+
+<script>
+const SPEC_CONTENT = {
+  path: "/Users/sequenzia/dev/repos/amc/specs/agent-messaging-channel-SPEC.md",
+  name: "Agent Messaging Channel (AMC)",
+  depthLevel: "Full-Tech",
+  analyzedAt: "2026-05-02 12:00",
+  content: document.getElementById('spec-source').textContent
+};
+
+const FINDINGS_DATA = [
+  {
+    id: "FIND-001",
+    title: "iMessage IDs are not consistently namespaced",
+    category: "Inconsistencies",
+    severity: "warning",
+    location: "§7.3.1 (lines 622-651), §5.7 allowlist (lines 396-414), §7.3.3 (lines 759-761)",
+    lineNumber: 651,
+    currentText: "`channel_id` (string): platform-namespaced. iMessage uses E.164 phone or Apple ID email; Discord uses `discord:<dm|channel>:<id>`.",
+    issue: "The spec states sender.id and channel_id are 'platform-namespaced' but immediately defines iMessage IDs as raw E.164 phone or email — i.e., not namespaced — while Discord uses an explicit discord: prefix. The allowlist example mirrors the inconsistency: iMessage uses raw '+15551234567', Discord uses 'discord:user:...'. With single-column PKs in the ERD, raw E.164 strings and discord:user:... strings share the same key space.",
+    impact: "PK collision risk; the 'platform-namespaced' mental model the spec sets up is internally violated; a future third connector author has no rule to follow.",
+    proposedText: "Either (a) namespace iMessage too — `imessage:phone:+15551234567`, `imessage:email:foo@bar.com` — and update §7.3.1, allowlist, and §7.3.3 examples; OR (b) keep iMessage raw, drop the 'platform-namespaced' wording, and change PKs in §7.3.2 to composite (source, channel_id) and (source, sender_id).",
+    status: "pending"
+  },
+  {
+    id: "FIND-002",
+    title: "senders.allowlist_status enum undefined; conflicts with messages.allowlist_status",
+    category: "Inconsistencies",
+    severity: "warning",
+    location: "§7.3.2 ERD (lines 698-706), §7.3.3 messages (line 765)",
+    lineNumber: 765,
+    currentText: "`allowlist_status` | TEXT | NOT NULL CHECK IN ('allowed','unknown','outbound') | `outbound` for messages we sent",
+    issue: "Both messages and senders have an allowlist_status column. messages enum is ('allowed','unknown','outbound'); senders has no enum defined. The 'outbound' value makes no sense on a sender row.",
+    impact: "Implementer guesses at the sender enum; risk of derived state diverging; migrations may apply different CHECK constraints than intended.",
+    proposedText: "Add senders field-definition table to §7.3.3 with `allowlist_status TEXT NOT NULL CHECK IN ('allowed','unknown')`. State explicitly that senders.allowlist_status is the source of truth and messages.allowlist_status is a denormalized snapshot at INSERT time (with 'outbound' reserved for agent-sent messages where allowlisting doesn't apply).",
+    status: "pending"
+  },
+  {
+    id: "FIND-003",
+    title: "iMessage send retry: '3 retries' vs '3 attempts' — off by one",
+    category: "Inconsistencies",
+    severity: "warning",
+    location: "§5.2 (line 244, 258), §6.4 (line 516)",
+    lineNumber: 244,
+    currentText: "iMessage send: 3 retries with backoff before marking `send_failed`.",
+    issue: "§5.2 says '3 retries' (= 4 total attempts). §6.4 says '3 attempts on iMessage AppleScript failure with backoff' (= 3 total attempts). The two normative sections disagree by one.",
+    impact: "Implementer codes against one phrasing; tests written from the other phrasing fail; observed send_failed rate disagrees with attempt counts in logs.",
+    proposedText: "Standardize on: 'iMessage send: up to 4 total attempts (1 initial + 3 retries) with backoff before marking `send_failed`.' Apply identically in §5.2 acceptance criteria, §5.2 edge-cases table, and §6.4.",
+    status: "pending"
+  },
+  {
+    id: "FIND-004",
+    title: "§7.4.2 uses '404 NOT_FOUND' but stable code is MESSAGE_NOT_FOUND",
+    category: "Inconsistencies",
+    severity: "warning",
+    location: "§7.4.2 (line 851), §7.4.12 stable codes (line 1002)",
+    lineNumber: 851,
+    currentText: "**Response**: `200 OK` with envelope or `404 NOT_FOUND`.",
+    issue: "§7.4.2's NOT_FOUND is not in the §7.4.12 stable-codes list; §7.4.3 uses the correct MESSAGE_NOT_FOUND. The §7.4.2 form will produce a divergent error contract.",
+    impact: "Client error-handling code keyed on MESSAGE_NOT_FOUND won't match §7.4.2's actual response; OpenAPI-generated clients will see two different 404 codes for the same resource family.",
+    proposedText: "**Response**: `200 OK` with envelope, or `404` with `code=MESSAGE_NOT_FOUND` (see §7.4.12 standard error envelope).",
+    status: "pending"
+  },
+  {
+    id: "FIND-005",
+    title: "POST /messages/send missing 404 CHANNEL_NOT_FOUND response",
+    category: "Missing Information",
+    severity: "warning",
+    location: "§7.4.5 (lines 913-922), §5.2 error handling (line 266)",
+    lineNumber: 922,
+    currentText: "`429` — `code=RATE_LIMITED` with `Retry-After`.\n`422` — `code=IDEMPOTENCY_KEY_REUSE` if key has been used with a different body.\n`502` — `code=PLATFORM_SEND_FAILED` after retries exhausted.",
+    issue: "§5.2's error handling table promises a 404 CHANNEL_NOT_FOUND on send-to-unknown-channel, but §7.4.5 doesn't document that response. Endpoint contract is incomplete.",
+    impact: "FastAPI's auto-generated OpenAPI omits the 404; clients written from /openapi.json won't expect it; integration tests against §7.4.5 won't assert the §5.2 promise.",
+    proposedText: "Add to §7.4.5 response section: `404` — `code=CHANNEL_NOT_FOUND` if `channel_id` is not registered.",
+    status: "pending"
+  },
+  {
+    id: "FIND-006",
+    title: "Per-endpoint X-Agent-ID requirement is documented inconsistently",
+    category: "Ambiguities",
+    severity: "warning",
+    location: "§7.4 preamble (line 813), §7.4.1-§7.4.6 (lines 815-928)",
+    lineNumber: 813,
+    currentText: "All endpoints require `Authorization: Bearer <token>`. Reading endpoints additionally require `X-Agent-ID: <name>` (where noted).",
+    issue: "Only §7.4.1 has an explicit Authentication line. §7.4.2 has no X-Agent-ID example/declaration; §7.4.3 and §7.4.4 show it in examples but no Authentication line; §7.4.5 has neither; §7.4.6 is silent on auth entirely. REQ-AMC-003 implies X-Agent-ID is required on /unread and /mark_read but says nothing about /messages/{id}, /context, /send, /typing.",
+    impact: "Implementer codes inconsistent middleware; some routes 400 on missing header, others accept; clients see surprising auth failures.",
+    proposedText: "Add an explicit '**Authentication**: Bearer' or '**Authentication**: Bearer + X-Agent-ID required' line to every §7.4.x subsection. Add a small summary table at the top of §7.4 listing each endpoint × required headers. Recommend: /messages/{id} and /messages/context DO require X-Agent-ID since they're read paths that filter by allowlist visibility.",
+    status: "pending"
+  },
+  {
+    id: "FIND-007",
+    title: "Idempotency-Key on mark_read — required, optional, or vestigial?",
+    category: "Ambiguities",
+    severity: "warning",
+    location: "§7.4.4 (lines 873-881), §5.3 (line 282)",
+    lineNumber: 877,
+    currentText: "Idempotency-Key: 0d2f...",
+    issue: "mark_read is inherently idempotent via UPSERT semantics. The §7.4.4 example shows an Idempotency-Key header but neither §5.3 nor §7.4.4 explains what it adds beyond UPSERT, whether it's required, or what response semantics apply on key reuse.",
+    impact: "Ambiguous middleware behavior — does mark_read consume idempotency_keys rows for no semantic gain? Implementer may build either flavor.",
+    proposedText: "Either (a) drop the Idempotency-Key header from the §7.4.4 example since UPSERT covers it, OR (b) add a sentence in §5.3 explaining what it adds (e.g., 'lets duplicate calls return identical marked_count even if the underlying state changed between the two calls'). Mark the header as 'optional' either way.",
+    status: "pending"
+  },
+  {
+    id: "FIND-008",
+    title: "Discord 'REST replay if supported' is hand-wavy in P0 acceptance criteria",
+    category: "Ambiguities",
+    severity: "warning",
+    location: "§5.1 Edge Cases (line 214)",
+    lineNumber: 214,
+    currentText: "Discord gateway disconnects mid-conversation | Gateway WS close | Library-level reconnect with backoff; resume from last sequence ID; missed messages are pulled via REST replay if supported, else accepted as a soft gap",
+    issue: "Discord's gateway offers RESUME for in-buffer-window gaps, but for messages outside the resume buffer there's no generic 'replay since timestamp X' REST endpoint — recovery requires per-channel GET /channels/{id}/messages?after=<last_seen_id>. 'If supported' is doing a lot of work in a P0 criterion.",
+    impact: "Implementer either overbuilds a per-channel polling fallback they don't understand, or skips replay and silently loses messages on long disconnects.",
+    proposedText: "Tighten to one of: (a) 'Rely on RESUME session; accept any post-buffer-window gap as lost in v1,' OR (b) 'After disconnect > N minutes, REST-poll each known channel via messages?after=<last_seen_id>.' Pick one and remove 'if supported'.",
+    status: "pending"
+  },
+  {
+    id: "FIND-009",
+    title: "SIGHUP allowlist reload — 'version captured at message time' is unspecified mechanism",
+    category: "Ambiguities",
+    severity: "warning",
+    location: "§5.7 (lines 388-391)",
+    lineNumber: 389,
+    currentText: "`SIGHUP` reloads the file; in-flight messages use the version captured at message time.",
+    issue: "'Captured at message time' implies a snapshot mechanism but doesn't say what — per-message copy of allowlist? Version counter? Or 'resolve at INSERT and never re-resolve'? OQ-4 addresses one downstream consequence but the underlying mechanism is undefined.",
+    impact: "Implementer guesses (most likely: resolve at INSERT, persist on row, never re-resolve), which means OQ-4's default is implicitly assumed. A future operator expecting atomic snapshots across a batch will be surprised.",
+    proposedText: "Add to §5.7: 'Allowlist resolution happens once per message at INSERT time; the resolved sender_id, display_name, person_id, and allowlist_status are persisted on the message and sender rows and are not recomputed against later allowlist versions.'",
+    status: "pending"
+  },
+  {
+    id: "FIND-010",
+    title: "PK uniqueness for channels.channel_id and senders.sender_id not scoped by source",
+    category: "Inconsistencies",
+    severity: "warning",
+    location: "§7.3.2 ERD (lines 691-706)",
+    lineNumber: 692,
+    currentText: "CHANNELS { string channel_id PK; string source; ... }\nSENDERS { string sender_id PK; string source; ... }",
+    issue: "Single-column PKs on channel_id and sender_id. Combined with FIND-001, theoretical collision path between platforms. Composite PKs make the cross-source uniqueness invariant explicit and survive a 'connector forgot to prefix' bug.",
+    impact: "Same row representing two distinct entities silently — corrupts message routing and identity_links derivation.",
+    proposedText: "Change PKs in §7.3.2 to composite: (source, channel_id) on channels, (source, sender_id) on senders. Update FK declarations on messages to match.",
+    status: "pending"
+  },
+  {
+    id: "FIND-011",
+    title: "channels, senders, identity_links, attachments, connector_state lack field definitions in §7.3.3",
+    category: "Missing Information",
+    severity: "warning",
+    location: "§7.3.3 (line 751)",
+    lineNumber: 751,
+    currentText: "#### 7.3.3 Field definitions (selected tables)",
+    issue: "Five ERD entities have no field-level definition table: channels (last_seen_message_id?), senders (allowlist_status enum, first_seen/last_seen?), identity_links (composition rules?), attachments (bytes_path format? original_url_or_path which?), connector_state (cursor format — stringified ROWID for iMessage, Discord session+seq?).",
+    impact: "Migration author guesses at types/constraints; reviewer can't verify schema consistency; a third connector author has no contract for connector_state.cursor.",
+    proposedText: "Add field-definition tables for the five missing entities. Or, if intentionally deferred, change the §7.3.3 heading to 'Field definitions (most important tables)' and add: 'Remaining tables (channels, senders, identity_links, attachments, connector_state) are documented inline in their respective REQ-AMC-NNN features.'",
+    status: "pending"
+  },
+  {
+    id: "FIND-012",
+    title: "ULID, HMAC, chat.guid, RFC 3339 used but not in glossary",
+    category: "Missing Information",
+    severity: "warning",
+    location: "§15.1 Glossary (lines 1419-1439); used throughout",
+    lineNumber: 1419,
+    currentText: "### 15.1 Glossary",
+    issue: "§15.1 defines 16 terms but omits frequent technical references: ULID (used as id format throughout — line 622, 757, 787), HMAC (used in §6.2, §5.5, §7.4.11), chat.guid (used in §4.3 and §7.5 sequence diagrams), RFC 3339 (line 659).",
+    impact: "A teammate doing the §3.2 60-minute SETUP.md install hits acronyms with no in-spec definition; affects spec self-containment.",
+    proposedText: "Add to §15.1: ULID (Universally Unique Lexicographically Sortable Identifier — 26-char base32, sorts by creation time); HMAC (Hash-based Message Authentication Code, used here with SHA-256); chat.guid (the chat.guid column from chat.db's chat table; stable identifier for an iMessage conversation); and a glossary entry for RFC 3339 or define it inline at first use.",
+    status: "pending"
+  },
+  {
+    id: "FIND-013",
+    title: "§6.2 Authorization role table implies enforcement that the section explicitly disclaims",
+    category: "Ambiguities",
+    severity: "warning",
+    location: "§6.2 (lines 488-495)",
+    lineNumber: 495,
+    currentText: "There is no role separation enforced by token in v1: a single bearer token grants both. `X-Agent-ID` is for cursor-isolation, not auth.",
+    issue: "The roles table presents an access-control matrix; the disclaimer below says it isn't enforced. A reader asks: 'If I send X-Agent-ID: claude-code with a request to /healthz, do I get 200 or 403?' The answer per the disclaimer is 200, but the table reads like 403.",
+    impact: "Implementer adds enforcement (which the disclaimer says NOT to do) or skips it (then the table is misleading).",
+    proposedText: "Rename the table heading to 'Conventional Use (not enforced in v1)' and keep the disclaimer; OR actually enforce: route /healthz, /quarantine, etc. only when X-Agent-ID is absent and update the disclaimer. Recommend the first option for v1 scope.",
+    status: "pending"
+  },
+  {
+    id: "FIND-014",
+    title: "§9.0 heading 'Pre-Phase 0' is misleading",
+    category: "Structure Issues",
+    severity: "warning",
+    location: "§9.0 (line 1142)",
+    lineNumber: 1142,
+    currentText: "### 9.0 Pre-Phase 0 — Spike POC (~half day)",
+    issue: "The section is titled 'Pre-Phase 0' but its content is structurally identical to §9.1-§9.4 phase blocks. There's no separate Phase 0 elsewhere — this IS Phase 0. The 'Pre-' prefix creates false expectation that another section follows before §9.1.",
+    impact: "Skim-reading confusion; tracker tools may create a phantom 'Phase 0' milestone in addition to 'Pre-Phase 0'.",
+    proposedText: "### 9.0 Phase 0 — Spike POC (~half day)",
+    status: "pending"
+  },
+  {
+    id: "FIND-015",
+    title: "§3.2 'Setup repeatability' measurement uses n=1 sample",
+    category: "Inconsistencies",
+    severity: "suggestion",
+    location: "§3.2 (line 64)",
+    lineNumber: 64,
+    currentText: "Setup repeatability | N/A | A teammate completes setup from `SETUP.md` in ≤ 60 minutes | One witnessed install attempt | Phase 4",
+    issue: "A single observation isn't a metric — it's an acceptance criterion. Other rows in §3.2 are aggregate metrics (P95 latencies, ≥95% delivery rate). This row is a one-shot test.",
+    impact: "Minor — internal consistency with the rest of the table.",
+    proposedText: "Either reframe as an acceptance criterion in §9.4's checkpoint gate (where it already lives) and remove from §3.2; OR keep it in §3.2 with explicit framing: 'Acceptance criterion (n=1; this is a witnessed install, not a statistic).'",
+    status: "pending"
+  },
+  {
+    id: "FIND-016",
+    title: "§7.4.2 lacks response example",
+    category: "Structure Issues",
+    severity: "suggestion",
+    location: "§7.4.2 (line 851)",
+    lineNumber: 851,
+    currentText: "**Response**: `200 OK` with envelope or `404 NOT_FOUND`.",
+    issue: "Every other §7.4.x endpoint shows an explicit JSON request and/or response example. §7.4.2 has only this one-liner.",
+    impact: "Minor — inconsistent presentation; reader has to follow the §7.3.1 envelope cross-reference manually.",
+    proposedText: "**Request**:\n```http\nGET /messages/{id}\nAuthorization: Bearer {token}\nX-Agent-ID: claude-code\n```\n**Response**: `200 OK` with the full normalized envelope (see §7.3.1).\n**Errors**: `404` with `code=MESSAGE_NOT_FOUND` if the message is not found or is quarantined.",
+    status: "pending"
+  },
+  {
+    id: "FIND-017",
+    title: "messages.message_ts (DB) vs envelope timestamp field-name mismatch",
+    category: "Inconsistencies",
+    severity: "suggestion",
+    location: "§7.3.1 (line 641), §7.3.3 (line 766)",
+    lineNumber: 766,
+    currentText: "`message_ts` | TEXT (ISO 8601) | NOT NULL | Platform-claimed timestamp",
+    issue: "Envelope field is timestamp; DB column is message_ts. Mapping is implicit. Also, DB column created_at (adapter ingest time) has no envelope counterpart but the spec doesn't say so explicitly.",
+    impact: "Minor — reader has to deduce the mapping; ORM models will need explicit aliasing.",
+    proposedText: "Add a note under §7.3.3 messages table: '`message_ts` maps to `envelope.timestamp`. `created_at` is adapter-internal and not exposed in the envelope.'",
+    status: "pending"
+  },
+  {
+    id: "FIND-018",
+    title: "§11.2 missing wrapper-side env vars (AMC_BASE_URL, AMC_AGENT_ID)",
+    category: "Missing Information",
+    severity: "suggestion",
+    location: "§11.2 (lines 1335-1347), §5.6 (line 370)",
+    lineNumber: 1335,
+    currentText: "### 11.2 Feature Flags",
+    issue: "§5.6 specifies wrapper config AMC_BASE_URL, AMC_BEARER_TOKEN, AMC_AGENT_ID. §11.2 lists adapter-only env vars. AMC_BEARER_TOKEN is shared between adapter and wrapper but only documented as adapter-side.",
+    impact: "Minor — leads to config-step gaps in SETUP.md if §11 is the source for deployment configuration.",
+    proposedText: "Add a §11.2.1 'Wrapper environment variables' subsection listing AMC_BASE_URL, AMC_BEARER_TOKEN, AMC_AGENT_ID; or add a 'wrapper' column to the existing §11.2 table marking which vars each process reads.",
+    status: "pending"
+  },
+  {
+    id: "FIND-019",
+    title: "§3.2 'Schema-divergence-from-blueprint tracked' is process, not outcome",
+    category: "Ambiguities",
+    severity: "suggestion",
+    location: "§3.2 (line 65)",
+    lineNumber: 65,
+    currentText: "Schema-divergence-from-blueprint tracked | Partial | All v1 divergences updated in blueprint | Diff blueprint vs. spec; resolve | End of Phase 1",
+    issue: "Binary done/not-done deliverable, not a measurable success metric. Same item is tracked in §15.3 ('Required Blueprint Updates (post-Phase 1)') and as a §9.1 checkpoint-gate item.",
+    impact: "Minor — clutters the success-metrics table with a non-metric.",
+    proposedText: "Remove from §3.2; the same tracking lives in §15.3 and §9.1's checkpoint gate.",
+    status: "pending"
+  },
+  {
+    id: "FIND-020",
+    title: "direction='outbound' and allowlist_status='outbound' enum-value overlap",
+    category: "Inconsistencies",
+    severity: "suggestion",
+    location: "§7.3.3 messages (lines 764-765), §14 OQ-3 (line 1411)",
+    lineNumber: 765,
+    currentText: "`allowlist_status` | TEXT | NOT NULL CHECK IN ('allowed','unknown','outbound') | `outbound` for messages we sent",
+    issue: "The string 'outbound' is a valid value in two enums on the same row, meaning two different things. allowlist_status='outbound' is really 'N/A — agent-sent message; allowlisting doesn't apply.' Lexical collision with direction's 'outbound' creates a smell — schema is doing double duty in one column.",
+    impact: "Minor naming smell; confuses SQL queries that filter on either column.",
+    proposedText: "Rename the third value of allowlist_status to 'not_applicable' (or drop it: let direction='outbound' → allowlist_status IS NULL carry the semantics). Dovetails with OQ-3 — recommend resolving them together.",
+    status: "pending"
+  }
+];
+
+const STATE = {
+  findings: [],
+  selectedId: null,
+  statusFilter: 'all',
+  severityFilter: 'all',
+  comments: {}
+};
+
+function init() {
+  STATE.findings = FINDINGS_DATA.map(f => ({
+    ...f,
+    status: f.status || 'pending'
+  }));
+  renderHeader();
+  renderStats();
+  renderFilters();
+  renderSpec();
+  renderFindings();
+  updatePromptPanel();
+}
+
+function renderHeader() {
+  document.getElementById('spec-name').textContent = SPEC_CONTENT.name || 'Spec Analysis';
+  document.getElementById('depth-level').textContent = SPEC_CONTENT.depthLevel || '';
+  document.getElementById('analyzed-at').textContent = SPEC_CONTENT.analyzedAt || '';
+  document.title = `Review: ${SPEC_CONTENT.name || 'Spec Analysis'}`;
+}
+
+function renderStats() {
+  const counts = { total: STATE.findings.length, critical: 0, warning: 0, suggestion: 0, pending: 0, approved: 0, rejected: 0 };
+  STATE.findings.forEach(f => {
+    counts[f.severity]++;
+    counts[f.status]++;
+  });
+
+  const el = document.getElementById('stats');
+  el.innerHTML = [
+    statHTML('Total', counts.total, ''),
+    statHTML('Critical', counts.critical, 'var(--purple)'),
+    statHTML('Warning', counts.warning, 'var(--amber)'),
+    statHTML('Suggestion', counts.suggestion, 'var(--blue)'),
+    statHTML('Pending', counts.pending, 'var(--amber)'),
+    statHTML('Approved', counts.approved, 'var(--green)'),
+    statHTML('Rejected', counts.rejected, 'var(--red)')
+  ].join('');
+}
+
+function statHTML(label, value, color) {
+  const pct = STATE.findings.length ? (value / STATE.findings.length * 100) : 0;
+  return `<div class="stat">
+    <div class="stat-value" style="color:${color || 'var(--text)'}">${value}</div>
+    <div class="stat-label">${label}</div>
+    <div class="stat-bar"><div class="stat-bar-fill" style="width:${pct}%;background:${color || 'var(--border)'}"></div></div>
+  </div>`;
+}
+
+function renderFilters() {
+  const counts = { all: STATE.findings.length, pending: 0, approved: 0, rejected: 0 };
+  STATE.findings.forEach(f => counts[f.status]++);
+
+  const tabs = [
+    { key: 'all', label: 'All' },
+    { key: 'pending', label: 'Pending' },
+    { key: 'approved', label: 'Approved' },
+    { key: 'rejected', label: 'Rejected' }
+  ];
+
+  document.getElementById('status-filters').innerHTML = tabs.map(t =>
+    `<button class="filter-tab${STATE.statusFilter === t.key ? ' active' : ''}"
+      onclick="setStatusFilter('${t.key}')">${t.label}<span class="count">${counts[t.key]}</span></button>`
+  ).join('');
+}
+
+function renderSpec() {
+  const content = SPEC_CONTENT.content || '';
+  const el = document.getElementById('spec-content');
+  const lines = content.split('\n');
+  const findingsByLine = {};
+  STATE.findings.forEach(f => {
+    if (f.lineNumber) {
+      if (!findingsByLine[f.lineNumber]) findingsByLine[f.lineNumber] = [];
+      findingsByLine[f.lineNumber].push(f);
+    }
+  });
+
+  let html = '';
+  lines.forEach((line, i) => {
+    const lineNum = i + 1;
+    const findings = findingsByLine[lineNum];
+    if (findings) {
+      const f = findings[0];
+      const statusClass = f.status !== 'pending' ? ` status-${f.status}` : '';
+      const selectedClass = f.id === STATE.selectedId ? ' selected' : '';
+      const markers = findings.map(ff =>
+        `<span class="annotation-marker severity-${ff.severity}" onclick="selectFinding('${ff.id}')" title="${escapeAttr(ff.title)}">${ff.id}</span>`
+      ).join('');
+      html += `<div class="annotated-line severity-${f.severity}${statusClass}${selectedClass}" data-finding-id="${f.id}" onclick="selectFinding('${f.id}')">${renderMarkdownLine(line)}${markers}</div>`;
+    } else {
+      html += `<div>${renderMarkdownLine(line)}</div>`;
+    }
+  });
+
+  el.innerHTML = html;
+}
+
+function renderFindings() {
+  const filtered = STATE.findings.filter(f => {
+    if (STATE.statusFilter !== 'all' && f.status !== STATE.statusFilter) return false;
+    if (STATE.severityFilter !== 'all' && f.severity !== STATE.severityFilter) return false;
+    return true;
+  });
+
+  const el = document.getElementById('findings-list');
+
+  if (filtered.length === 0) {
+    el.innerHTML = `<div class="empty-state"><h3>No findings match filters</h3><p>Try changing the status or severity filter.</p></div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.map(f => {
+    const isSelected = f.id === STATE.selectedId;
+    const comment = STATE.comments[f.id] || '';
+    return `
+    <div class="finding-card${isSelected ? ' selected' : ''} status-${f.status}" onclick="selectFinding('${f.id}')">
+      <div class="finding-header">
+        <div>
+          <span class="finding-id">${esc(f.id)}</span>
+          <span class="badge badge-${f.severity}">${esc(f.severity)}</span>
+          <span class="status-badge status-${f.status}">${esc(f.status)}</span>
+        </div>
+      </div>
+      <div class="finding-title">${esc(f.title)}</div>
+      <div class="category-badge">${esc(f.category)}</div>
+      <div class="finding-location">${esc(f.location)}</div>
+      <div class="finding-issue">${esc(f.issue)}</div>
+      ${f.impact ? `<div class="finding-issue" style="font-style:italic">${esc(f.impact)}</div>` : ''}
+      ${isSelected ? `
+        ${f.currentText ? `
+          <div class="finding-detail" onclick="event.stopPropagation()">
+            <div class="finding-detail-label">Current</div>
+            <div class="finding-detail-text current">${esc(f.currentText)}</div>
+          </div>` : ''}
+        ${f.proposedText ? `
+          <div class="finding-detail" onclick="event.stopPropagation()">
+            <div class="finding-detail-label">Proposed</div>
+            <div class="finding-detail-text proposed">${esc(f.proposedText)}</div>
+          </div>` : ''}
+        <textarea class="comment-area" placeholder="Add a comment (optional)..." oninput="setComment('${f.id}', this.value)" onclick="event.stopPropagation()" onmousedown="event.stopPropagation()">${esc(comment)}</textarea>
+        <div class="finding-actions">
+          ${f.status === 'pending' ? `
+            <button class="btn btn-approve" onclick="event.stopPropagation(); setStatus('${f.id}', 'approved')">Approve</button>
+            <button class="btn btn-reject" onclick="event.stopPropagation(); setStatus('${f.id}', 'rejected')">Reject</button>
+          ` : `
+            <button class="btn" onclick="event.stopPropagation(); setStatus('${f.id}', 'pending')">Reset to Pending</button>
+          `}
+        </div>
+      ` : ''}
+    </div>`;
+  }).join('');
+}
+
+function renderMarkdownLine(line) {
+  if (/^#### (.+)/.test(line)) return `<h4>${esc(RegExp.$1)}</h4>`;
+  if (/^### (.+)/.test(line)) return `<h3>${esc(RegExp.$1)}</h3>`;
+  if (/^## (.+)/.test(line)) return `<h2>${esc(RegExp.$1)}</h2>`;
+  if (/^# (.+)/.test(line)) return `<h1>${esc(RegExp.$1)}</h1>`;
+  if (/^[-*] (.+)/.test(line)) return `<li>${inlineMarkdown(RegExp.$1)}</li>`;
+  if (/^\d+\. (.+)/.test(line)) return `<li>${inlineMarkdown(RegExp.$1)}</li>`;
+  if (line.trim() === '') return '<br>';
+  return inlineMarkdown(line);
+}
+
+function inlineMarkdown(text) {
+  let s = esc(text);
+  s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  s = s.replace(/`(.+?)`/g, '<code>$1</code>');
+  return s;
+}
+
+function selectFinding(id) {
+  STATE.selectedId = STATE.selectedId === id ? null : id;
+  updateAll();
+}
+
+function setStatusFilter(filter) {
+  STATE.statusFilter = filter;
+  STATE.selectedId = null;
+  updateAll();
+}
+
+function setStatus(id, status) {
+  const f = STATE.findings.find(x => x.id === id);
+  if (f) f.status = status;
+  updateAll();
+  showToast(`${id} ${status}`);
+}
+
+function setComment(id, text) {
+  STATE.comments[id] = text;
+}
+
+function updateAll() {
+  renderStats();
+  renderFilters();
+  renderSpec();
+  renderFindings();
+  updatePromptPanel();
+}
+
+function updatePromptPanel() {
+  const approved = STATE.findings.filter(f => f.status === 'approved');
+  const panel = document.getElementById('prompt-panel');
+  const countEl = document.getElementById('approved-count');
+
+  countEl.textContent = approved.length;
+
+  if (approved.length === 0) {
+    panel.classList.add('hidden');
+    return;
+  }
+
+  panel.classList.remove('hidden');
+
+  const prompt = generatePrompt(approved);
+  document.getElementById('prompt-content').textContent = prompt;
+}
+
+function generatePrompt(approved) {
+  const lines = [`Apply these changes to the spec at: ${SPEC_CONTENT.path}\n`];
+
+  approved.forEach((f, i) => {
+    lines.push(`${i + 1}. ${f.title}`);
+    lines.push(`   Location: ${f.location}`);
+    if (f.currentText && f.proposedText) {
+      lines.push(`   Change: "${f.currentText}" → "${f.proposedText}"`);
+    } else if (f.proposedText) {
+      lines.push(`   Add: "${f.proposedText}"`);
+    } else {
+      lines.push(`   Issue: ${f.issue}`);
+    }
+    const comment = STATE.comments[f.id];
+    if (comment) {
+      lines.push(`   Note: ${comment}`);
+    }
+    lines.push('');
+  });
+
+  return lines.join('\n');
+}
+
+function copyPrompt() {
+  const approved = STATE.findings.filter(f => f.status === 'approved');
+  const prompt = generatePrompt(approved);
+  navigator.clipboard.writeText(prompt).then(() => {
+    showToast('Prompt copied to clipboard');
+  }).catch(() => {
+    const el = document.getElementById('prompt-content');
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    showToast('Select All applied — press Cmd/Ctrl+C');
+  });
+}
+
+function downloadSpec() {
+  const content = SPEC_CONTENT.content || '';
+  let modified = content;
+
+  const approved = STATE.findings.filter(f => f.status === 'approved' && f.currentText && f.proposedText);
+  approved.forEach(f => {
+    modified = modified.replace(f.currentText, f.proposedText);
+  });
+
+  const blob = new Blob([modified], { type: 'text/markdown' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const baseName = (SPEC_CONTENT.path || 'spec').split('/').pop().replace(/\.md$/, '');
+  a.download = `${baseName}.modified.md`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('Modified spec downloaded');
+}
+
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+function escapeAttr(str) {
+  return esc(str).replace(/"/g, '&quot;');
+}
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 2000);
+}
+
+document.getElementById('severity-filter').addEventListener('change', function() {
+  STATE.severityFilter = this.value;
+  STATE.selectedId = null;
+  updateAll();
+});
+
+init();
+</script>
+</body>
+</html>
