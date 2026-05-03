@@ -1,8 +1,8 @@
 # Agent Messaging Channel PRD
 
-**Version**: 1.0
+**Version**: 1.1
 **Author**: Stephen Sequenzia
-**Date**: 2026-05-02
+**Date**: 2026-05-03
 **Status**: Draft
 **Spec Type**: New product
 **Spec Depth**: Full technical documentation
@@ -50,18 +50,17 @@ This is a personal-tool project; "impact" is measured against the owner's experi
 1. **Receive and respond** to messages on iMessage and Discord through a single agent in v1.
 2. **Decouple platform integrations from agent logic** so the agent framework can be swapped without rewriting connectors. Both MCP-aware (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) and non-MCP (direct-HTTP) clients are first-class.
 3. **Run entirely on one Mac**, with no external hosting dependencies for the iMessage path.
-4. **Ship a documented, soak-validated v1** that a teammate could install and run without the owner present.
+4. **Ship a v1 whose correctness is provable by automated tests alone** — no human-in-the-loop verification, no real Discord bot token, no real Apple ID, and no manual round-trips required to declare any phase complete. Real-platform validation is a deployment-time concern, not a build-time gate.
 
 ### 3.2 Success Metrics
 
 | Metric | Current Baseline | Target | Measurement Method | Timeline |
 |--------|------------------|--------|--------------------|----------|
-| Round-trip both platforms via MCP wrapper | Not implemented | Confirmed: 1 real iMessage exchange + 1 real Discord exchange end-to-end | Manual e2e during Phase 3 acceptance | End of Phase 3 |
-| Soak duration without manual intervention | N/A | ≥ 7 consecutive days | launchd uptime + structured log review | Phase 4 |
-| Receive → agent-visible latency (P95) | N/A | < 3 s | Compare envelope `timestamp` to `created_at` in DB; query log on representative sample | Phase 4 |
-| Send → platform-acked latency (P95) | N/A | < 2 s | `/messages/send` request duration in adapter logs | Phase 4 |
-| Webhook delivery success rate (first attempt) | N/A | ≥ 95% under normal conditions | `webhook_deliveries` table aggregate | Phase 4 |
-| Setup repeatability | N/A | A teammate completes setup from `SETUP.md` in ≤ 60 minutes | One witnessed install attempt | Phase 4 |
+| Round-trip both platforms via MCP wrapper | Not implemented | Confirmed: automated end-to-end test exercises MCP wrapper → adapter → Discord and iMessage paths against fakes/fixtures | Automated MCP-wrapper integration test in CI | End of Phase 3 |
+| Receive → agent-visible latency (P95) | N/A | < 3 s | Automated synthetic-load test (60 messages over 60 s) recorded in CI; compare envelope `timestamp` to `created_at` in DB | Phase 4 |
+| Send → platform-acked latency (P95) | N/A | < 2 s | `/messages/send` request-duration metric in the same automated load test (platform side stubbed with realistic latency) | Phase 4 |
+| Webhook delivery success rate (first attempt) | N/A | ≥ 95% against an in-process receiver that echoes 200 | `webhook_deliveries` table aggregate at the end of the automated load test | Phase 4 |
+| Stability under bounded automated run | N/A | Adapter survives a 30 min synthetic-traffic run with zero crashes and no `connector_state` regressions | Bounded stability test in CI; structured logs scanned for `level=error` | Phase 4 |
 | Schema-divergence-from-blueprint tracked | Partial | All v1 divergences updated in blueprint | Diff blueprint vs. spec; resolve | End of Phase 1 |
 
 ### 3.3 Non-Goals
@@ -348,7 +347,7 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 |----------|-------|-------------------|
 | Receiver returns 200 then crashes before processing | 1 attempt, success per HTTP | Adapter considers it delivered; receiver must do its own idempotency on `X-AMC-Delivery-Id` |
 | Receiver returns 4xx (e.g., 400 bad signature) | Permanent client error | No retry; row marked `dead` immediately; logged as `WARN` |
-| Webhook URL changes mid-soak | Config reload via SIGHUP | New deliveries go to new URL; in-flight retries continue against the URL captured at queue time |
+| Webhook URL changes at runtime | Config reload via SIGHUP | New deliveries go to new URL; in-flight retries continue against the URL captured at queue time |
 
 ---
 
@@ -366,7 +365,7 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 - [ ] Wrapper imports nothing platform-specific (no Discord SDK, no AppleScript helpers).
 - [ ] Each tool maps to exactly one HTTP call against the adapter (with the bearer token and `X-Agent-ID` set from wrapper env vars).
 - [ ] Wrapper translates HTTP errors to MCP-friendly error responses (no panics or unhandled exceptions reaching the MCP host).
-- [ ] Verified working with the official **MCP Inspector** and at least one of the four named clients (Claude Code is canonical).
+- [ ] Verified by an automated `@modelcontextprotocol/sdk` client harness (Phase 3 wrapper end-to-end test) that spawns the wrapper as a stdio child and exercises every tool. Compatibility with the four named human-facing clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) is a deployment-time concern, not a build acceptance gate.
 - [ ] Wrapper config: `AMC_BASE_URL` (default `http://127.0.0.1:8080`), `AMC_BEARER_TOKEN`, `AMC_AGENT_ID`.
 
 **Tool definitions**: see §7.4.7.
@@ -470,11 +469,11 @@ display_name = "Bob"
 
 | Metric | Requirement | Measurement Method |
 |--------|-------------|--------------------|
-| Receive → agent-visible (P95) | < 3 s (DM, allowlisted) | `envelope.timestamp` vs `messages.created_at` over 24 h soak window |
+| Receive → agent-visible (P95) | < 3 s (DM, allowlisted) | `envelope.timestamp` vs `messages.created_at` recorded across the bounded automated stability run (§9.4) |
 | Send → caller response (P95) | < 2 s | Adapter request-duration log on `/messages/send` |
 | iMessage poll cycle | 1 s | Implementation-fixed |
 | Webhook first-attempt latency (P95) | < 1 s after message INSERT | Adapter log: time from INSERT to webhook POST |
-| Concurrent agents reading | ≥ 5 (Claude Code + Claude Desktop + Codex CLI + Codex Desktop + custom HTTP) | Manual exercise during phase 3 acceptance |
+| Concurrent agents reading | ≥ 5 distinct `X-Agent-ID` values reading without cross-contamination | Automated test that issues `/messages/unread` + `/messages/mark_read` from 5 in-process clients in parallel |
 | Adapter cold start | < 5 s to ready | launchd start to `/healthz` 200 |
 
 ### 6.2 Security Requirements
@@ -511,8 +510,8 @@ There is no role separation enforced by token in v1: a single bearer token grant
 
 ### 6.4 Reliability Requirements
 
-- **Uptime SLA**: best-effort; soak-test target is ≥ 7 days unattended. Not a paged service.
-- **RTO**: ≤ 5 minutes after Mac wake or process crash (launchd auto-restart).
+- **Uptime SLA**: best-effort; not a paged service. Build acceptance is gated only on a bounded automated stability run (see §10.3); long-duration soak validation is a deployment-time concern, not a build-time gate.
+- **RTO**: ≤ 5 minutes after Mac wake or process crash (launchd auto-restart) — exercised by an automated process-crash-and-relaunch test, not by leaving the Mac running for days.
 - **RPO**: zero for inbound — connectors maintain durable cursors that survive restarts. Webhook delivery is at-least-once with dead-lettering.
 - **Webhook retry policy**: 5 attempts, exponential backoff at ~1s, 5s, 30s, 2m, 10m. Then `dead`.
 - **Send retry policy**: iMessage AppleScript — up to 4 total attempts (1 initial + 3 retries) with backoff; library defaults on Discord 5xx.
@@ -1207,7 +1206,7 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 - Alembic migrations from day one.
 - Nightly SQLite file backup via launchd, 7-day retention.
 - Documentation: `README.md`, `SETUP.md`, `API.md`, `RUNBOOK.md`, plus ADRs for major decisions.
-- 7-day soak validation as the final acceptance step.
+- Bounded automated stability run (≤ 60 minutes of synthetic traffic against fakes) as the final acceptance step. Real-Mac soak is a post-deployment operator activity, not a v1 build-acceptance gate.
 
 ### 8.2 Out of Scope (v1)
 
@@ -1236,24 +1235,27 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 
 ## 9. Implementation Plan
 
-### 9.0 Phase 0 — Spike POC (~half day)
+### 9.0 Phase 0 — Test fixtures and platform stubs
 
-**Completion Criteria**: A standalone Python script that, on the target Mac, reads the last 5 rows from `~/Library/Messages/chat.db` and successfully sends a hardcoded message to a known iMessage contact via `osascript`. Confirms FDA and Automation prompts have been navigated.
+**Completion Criteria**: The repository contains (a) a fixture `chat.db` SQLite file with a realistic schema and a handful of pre-seeded rows (handles, messages, attachments, an `attributedBody` blob), (b) an injectable AppleScript subprocess shim that records calls and returns scripted outcomes, and (c) an in-process fake Discord gateway that speaks enough of the gateway protocol (`HELLO`, `IDENTIFY`, `READY`, `MESSAGE_CREATE`, `RESUME`) to drive `discord.py` end-to-end. All three are exercisable from `pytest` with no real macOS permissions and no real Discord credentials.
 
 | Deliverable | Description | Technical Tasks | Dependencies |
 |-------------|-------------|-----------------|--------------|
-| `spike/imessage_poc.py` | Read-and-send proof | Open chat.db read-only, query latest 5 rows, run `osascript -e 'tell application "Messages"...'`, log results | FDA + Automation grants |
-| Findings note | What surprised us | One-page markdown documenting permission flow and any chat.db quirks observed (handle table joins, `attributedBody` blob, etc.) | — |
+| `tests/fixtures/chat.db` | Pre-seeded SQLite database mirroring the real `chat.db` schema | Generate with a small Python builder script committed to the repo; cover: 1 DM thread with 3 messages, 1 attachment row, 1 message with `attributedBody` blob, 1 message from a non-allowlisted sender | — |
+| `amc/connectors/imessage/applescript.py` shim | Injectable subprocess interface | Define a thin `AppleScriptSender` protocol, ship a real implementation calling `osascript`, and a `FakeAppleScriptSender` for tests that records every call and returns scripted success/failure | — |
+| `tests/fakes/discord_gateway.py` | In-process fake Discord gateway server | Async WebSocket server (e.g. `websockets` lib) that performs the IDENTIFY/READY handshake, accepts injected `MESSAGE_CREATE` payloads, supports `RESUME`, and exposes a Python API to drive scenarios (`gateway.deliver(envelope_payload)`, `gateway.disconnect()`) | — |
+| `tests/fakes/discord_rest.py` | Fake Discord REST endpoint | `respx` (or equivalent) mounted on `discord.py`'s REST base URL, returning realistic `message_id` payloads on send | — |
+| Findings note | What the fixtures revealed | One-page markdown in `internal/notes/` documenting any chat.db quirks discovered while building the fixture (handle table joins, `attributedBody` decode path, attachment join), plus the fake-gateway protocol coverage map | — |
 
 **Checkpoint Gate**:
-- [ ] FDA confirmed working on the target Mac.
-- [ ] Automation prompt accepted.
-- [ ] Last-5-rows query returns plausible data.
-- [ ] AppleScript send delivers a real message.
+- [ ] `pytest tests/fixtures/test_chat_db_fixture.py` confirms the fixture loads and exposes the seeded rows via the connector's read path.
+- [ ] `FakeAppleScriptSender` can be substituted for the real one and records the exact command line that would be invoked, so iMessage send can be asserted without `osascript`.
+- [ ] The fake Discord gateway completes IDENTIFY → READY against `discord.py` and delivers a `MESSAGE_CREATE` that round-trips through the connector to a stub adapter sink.
+- [ ] No test in this phase requires Full Disk Access, Automation grant, real Apple ID, or real Discord bot token.
 
 ### 9.1 Phase 1: Adapter + storage + Discord connector + webhook + plumbing
 
-**Completion Criteria**: End-to-end Discord round-trip via `curl` against the local adapter. Webhook fires reliably. Allowlist enforced. Migrations run cleanly. OpenAPI spec served.
+**Completion Criteria**: Automated end-to-end test exercises the Discord round-trip path against the fake gateway and fake REST API from Phase 0: inbound `MESSAGE_CREATE` → adapter persist → webhook POST to in-process receiver → `GET /messages/unread` → `POST /messages/send` → fake REST records the outbound. Webhook retry behavior is verified against a deliberately-failing in-process receiver. Allowlist enforced. Migrations run cleanly. OpenAPI spec served. No real Discord credentials are involved.
 
 | Deliverable | Description | Technical Tasks | Dependencies |
 |-------------|-------------|-----------------|--------------|
@@ -1261,7 +1263,7 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 | Alembic migration | `001_init.sql` (or Python equivalent) | All tables in §7.3 | — |
 | Bearer auth middleware | Token check on all routes | FastAPI dependency | — |
 | Allowlist loader | TOML parse, in-memory map | `tomllib` (stdlib), watchdog for SIGHUP | — |
-| Discord connector | discord.py client as asyncio task | Gateway connect, MESSAGE_CREATE handler, allowlist + normalize, REST send | Bot token + intents |
+| Discord connector | discord.py client as asyncio task | Gateway connect, MESSAGE_CREATE handler, allowlist + normalize, REST send. Connector takes the gateway URL and REST base URL as config so the Phase 0 fakes can be injected | Phase 0 fakes |
 | REST endpoints | All §7.4 routes except quarantine bonus | Pydantic models per envelope, route handlers, error mapper | — |
 | Per-agent cursor logic | `message_reads` join in `/messages/unread` | SQL with NOT EXISTS or LEFT JOIN | — |
 | Idempotency middleware | Key cache on `send` and `mark_read` | Hash-and-cache pattern | — |
@@ -1270,41 +1272,44 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 | `/healthz` | Connector + queue status | — | — |
 | OpenAPI exposure | `/openapi.json`, `/docs` behind bearer | Override FastAPI defaults | — |
 | Structured logging | JSON formatter, daily rotation | structlog or stdlib | — |
-| Discord round-trip test | Manual e2e | Send DM to bot, verify webhook + `/messages/unread`; agent replies via `curl` | Bot in a server / DM |
+| Discord round-trip integration test | Automated e2e against fakes | Pytest test that boots the adapter on an ephemeral port, points the Discord connector at the fake gateway + fake REST, drives `gateway.deliver(...)`, asserts webhook receiver got the envelope, calls `/messages/unread` + `/messages/send` via httpx, asserts the fake REST recorded the outbound payload | Phase 0 fakes |
+| Webhook retry test | Automated dead-letter proof | In-process receiver that returns 500 on the first 5 attempts; assert `webhook_deliveries.status='dead'` after the configured backoff schedule (test uses an injectable clock) | — |
 
 **Checkpoint Gate**:
 - [ ] Architecture review against blueprint complete; divergences documented (§5.3 schema, §7.4 surface).
-- [ ] Database schema reviewed; alembic migration applies on a fresh DB and an existing DB.
-- [ ] API contract approved (`/openapi.json` matches §7.4).
-- [ ] Discord round-trip via `curl` works.
-- [ ] Webhook delivery + retry confirmed by stopping a test receiver and observing dead-letter.
+- [ ] Database schema reviewed; alembic migration applies on a fresh DB and an existing DB (asserted by a migration round-trip test).
+- [ ] API contract verified: `/openapi.json` schema-matches §7.4 (asserted by a contract test that diffs the served schema against a checked-in golden file).
+- [ ] Discord round-trip integration test passes against the Phase 0 fakes.
+- [ ] Webhook retry test passes; dead-letter row observed and underlying message remains in `/messages/unread`.
 
 ---
 
 ### 9.2 Phase 2: iMessage connector
 
-**Completion Criteria**: End-to-end iMessage round-trip via `curl`. Same envelope shape as Discord; same endpoints; no platform-specific code in the adapter routes.
+**Completion Criteria**: Automated end-to-end test exercises the iMessage round-trip path against the fixture `chat.db` and `FakeAppleScriptSender` from Phase 0: a writer task appends a row to a writable copy of the fixture → poller picks it up within one cycle → adapter persists → webhook fires → `/messages/send` invokes the fake AppleScript shim with the expected `chat.guid` and text. Same envelope shape as Discord; same endpoints; no platform-specific code in the adapter routes. No real macOS permissions and no real Apple ID required.
 
 | Deliverable | Description | Technical Tasks | Dependencies |
 |-------------|-------------|-----------------|--------------|
-| chat.db reader | Read-only async query | `sqlite3` in `to_thread`, query selecting since `last_seen_rowid`, handle resolution, attribute-body decode | FDA grant |
-| AppleScript sender | Outbound subprocess invocation | `osascript -e ...`, timeout, retry logic | Automation grant |
+| chat.db reader | Read-only async query | `sqlite3` in `to_thread`, query selecting since `last_seen_rowid`, handle resolution, `attributedBody` decode. The chat.db path is configurable so the test can point it at a temp copy of the Phase 0 fixture | Phase 0 fixture |
+| AppleScript sender | Outbound subprocess invocation behind the `AppleScriptSender` protocol | Real implementation calls `osascript -e ...` with timeout + retry logic; tests inject `FakeAppleScriptSender` | Phase 0 shim |
 | Connector state persistence | `connector_state` table updates | Transactional with INSERT into messages | Phase 1 schema |
-| Attachment copier | Copy chat.db attachment paths into local store | On INSERT, fork-copy bytes; populate `attachments` row | — |
-| Cursor recovery on restart | Resume from `connector_state.cursor` | Read at startup, default to "now" if empty | — |
-| Mac-wake handling | Detect `ROWID` jump after gap | If gap > N rows, log a `WARN` and process all | — |
-| iMessage round-trip test | Manual e2e | Send iMessage to allowlisted handle; verify webhook + unread; reply via `curl` | Mac with Messages signed in |
+| Attachment copier | Copy chat.db attachment paths into local store | On INSERT, fork-copy bytes; populate `attachments` row. Test exercises this with a small binary file referenced from the fixture | — |
+| Cursor recovery on restart | Resume from `connector_state.cursor` | Read at startup, default to "now" if empty. Test asserts that stopping the connector mid-stream and restarting resumes without duplicates | — |
+| Mac-wake handling | Detect `ROWID` jump after gap | If gap > N rows, log a `WARN` and process all. Test simulates a gap by injecting non-contiguous rows | — |
+| iMessage round-trip integration test | Automated e2e against fixture + shim | Pytest test that copies the fixture chat.db to a temp dir, boots the adapter pointed at the copy, runs an appender task that inserts a new row, asserts envelope appears in `/messages/unread`, calls `/messages/send`, asserts `FakeAppleScriptSender` recorded the call with the correct `chat.guid` and message body | — |
+| `attributedBody` decode test | Property/golden test for the trickiest blob | Decode the fixture's `attributedBody` row and assert a stable text extraction; pin against a checked-in golden output | — |
 
 **Checkpoint Gate**:
-- [ ] Integration tests pass against a fixture chat.db.
-- [ ] FDA + Automation flows documented in `SETUP.md`.
-- [ ] Round-trip works on the target Mac.
+- [ ] Integration tests pass against the fixture chat.db with no real FDA grant.
+- [ ] AppleScript-sender protocol abstraction lets tests run without `osascript` on the test host.
+- [ ] iMessage round-trip integration test passes; recorded fake-AppleScript invocation matches the expected command shape.
+- [ ] `SETUP.md` documents the FDA + Automation flow that the *operator* must complete at deployment time (separate from build-time acceptance).
 
 ---
 
 ### 9.3 Phase 3: MCP wrapper
 
-**Completion Criteria**: Each of the four MCP tools is invocable from the MCP Inspector and from at least one of the four named MCP clients (Claude Code is the canonical target). Wrapper has zero platform-specific imports.
+**Completion Criteria**: Each of the four MCP tools is exercised end-to-end by an automated test that uses the official `@modelcontextprotocol/sdk` **client** to spawn the wrapper as a stdio child and round-trip every tool against the running adapter (configured against the Phase 0 fakes). Wrapper has zero platform-specific imports. No MCP Inspector and no Claude Code session are required to pass acceptance.
 
 | Deliverable | Description | Technical Tasks | Dependencies |
 |-------------|-------------|-----------------|--------------|
@@ -1312,42 +1317,45 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 | Tool definitions | 4 tools per §7.4.7 | MCP tool registration with input schemas matching adapter request bodies | — |
 | HTTP client | Single shared client | `fetch` with bearer + agent-id headers from env | — |
 | Error mapping | HTTP → MCP errors | Translate adapter error codes to MCP `isError` responses with explanatory `content` | — |
-| MCP Inspector verification | Run `mcp inspector` against the wrapper | Each tool exercised manually | Wrapper built |
-| Claude Code verification | Run wrapper as configured MCP server in Claude Code | Round-trip both platforms via tool calls | Phase 2 done |
+| Wrapper unit tests | Isolated tool logic | vitest/node:test for input-schema validation, header propagation, error mapping (HTTP fixtures via `msw` or equivalent) | — |
+| Wrapper end-to-end test | Programmatic MCP client → wrapper → adapter | Test harness uses `@modelcontextprotocol/sdk`'s stdio client to launch the wrapper as a subprocess, then invokes each of the four tools against the adapter (which is itself wired to the Phase 0 fakes) and asserts the responses | Phase 2 done |
+| Import audit | Static check that the wrapper has no platform-specific deps | A repo script (or simple test) greps the wrapper's compiled output / dependency graph for `discord*`, `applescript`, `osascript`, `chat.db` and fails the build on any hit | — |
 
 **Checkpoint Gate**:
-- [ ] All 4 tools verified in MCP Inspector.
-- [ ] At least one named client (Claude Code) successfully exchanges messages on both platforms via the wrapper.
-- [ ] Wrapper imports audited: no `discord.*`, no AppleScript helpers.
+- [ ] All 4 tools verified by the automated MCP-SDK client harness; per-tool assertion on response shape and (where applicable) side effects in the adapter (e.g. `mark_read` produced a `message_reads` row).
+- [ ] Wrapper end-to-end test exchanges a Discord-shaped and an iMessage-shaped envelope through the four tools using the Phase 0 fakes — no real MCP host needed.
+- [ ] Import-audit check passes (no platform-specific imports leaked into the wrapper).
 
 ---
 
-### 9.4 Phase 4: Hardening, soak, docs
+### 9.4 Phase 4: Hardening, automated stability run, docs
 
-**Completion Criteria**: 7-day unattended soak passed. Setup + runbook + ADRs complete and reviewed against a fresh-Mac install.
+**Completion Criteria**: Bounded automated stability run (≤ 60 minutes of synthetic 1 msg/s traffic against Phase 0 fakes) completes with zero crashes, P95 latencies within the §6.1 targets, and ≥ 95% first-attempt webhook success against an in-process echo receiver. Setup + runbook + ADRs complete. Real-Mac soak by an operator is *post-handoff* and is explicitly **not** a build-acceptance gate.
 
 | Deliverable | Description | Technical Tasks | Dependencies |
 |-------------|-------------|-----------------|--------------|
 | launchd plist | `~/Library/LaunchAgents/com.user.amc-adapter.plist` | KeepAlive, RunAtLoad, log paths | — |
-| Backup launchd timer | Nightly `cp` of `amc.db` with rotation | Plist + shell script | — |
-| Attachment retention sweeper | Daily delete of attachments older than 90 days | Async task or launchd timer | — |
-| Idempotency-key sweeper | Hourly delete of expired keys | Async task | — |
+| launchd plist validation test | Static check, no live launchd required | Lint the plist with `plutil -lint` and assert keys/paths via an automated test; manual reboot-cycle exercise is a deployment-time activity, not a build gate | — |
+| Backup launchd timer | Nightly `cp` of `amc.db` with rotation | Plist + shell script. The shell script itself is unit-tested against a temp DB, independently of launchd | — |
+| Attachment retention sweeper | Daily delete of attachments older than 90 days | Async task or launchd timer; tested with an injectable clock that fast-forwards past the threshold | — |
+| Idempotency-key sweeper | Hourly delete of expired keys | Async task; same injectable-clock approach | — |
 | `README.md` | What it is, why, quick links | — | — |
-| `SETUP.md` | macOS perm flow, Discord bot creation, .env, allowlist, launchd install | Step-by-step with screenshots / commands | — |
-| `API.md` | REST + MCP tool reference | Generated from OpenAPI + hand-written MCP section | — |
+| `SETUP.md` | Operator runbook: macOS perm flow, Discord bot creation, .env, allowlist, launchd install | Step-by-step. SETUP.md is documentation for a future operator, not a v1 acceptance gate; correctness is verified by a docs-lint check (links resolve, code blocks parse) | — |
+| `API.md` | REST + MCP tool reference | Generated from OpenAPI + hand-written MCP section; contract-tested against §7.4 | — |
 | `RUNBOOK.md` | Common failures and recoveries | Permission revoked, gateway disconnect, AppleScript failing, webhook receiver outage, Mac asleep | — |
-| ADRs | One per major decision | Language pick (Python+FastAPI), per-agent cursor (schema divergence), attachment re-host, idempotency keys, allowlist file format, MCP stdio-only | — |
+| ADRs | One per major decision | Language pick (Python+FastAPI), per-agent cursor (schema divergence), attachment re-host, idempotency keys, allowlist file format, MCP stdio-only, autonomous-build acceptance model | — |
 | Blueprint update | Reconcile blueprint with spec | Edit §3 envelope additions, §5.3 read state, §6.1 v1 surface | — |
-| 7-day soak run | Real use under real conditions | Daily log check, fix any regressions, capture metrics for §3.2 | All prior phases |
+| Bounded automated stability run | Synthetic-traffic exerciser | A pytest-driven harness that boots the full stack against the Phase 0 fakes, drives 1 msg/s of mixed Discord + iMessage inbound for the configured duration (default 30 min, ≤ 60 min cap), randomly toggles the webhook receiver between 200 and 500 to exercise retry, and emits a JSON metrics summary asserted against §3.2 | All prior phases |
+| Crash-and-relaunch test | RTO proof | Send-9-receive-1, kill the adapter process mid-stream, relaunch, verify no duplicates and no lost inbound messages by comparing connector cursor + DB state | — |
 
 **Checkpoint Gate**:
-- [ ] launchd plist tested across a reboot cycle.
-- [ ] Backup verified by restoring from a snapshot.
-- [ ] All four named MCP clients exercised at least once during soak.
-- [ ] Soak metrics captured: P95 latencies, webhook delivery success rate, count of `send_failed`, count of dead-lettered webhooks.
-- [ ] SETUP.md walked by one teammate (or simulated cold install on a fresh user account) inside 60 minutes.
-- [ ] Documentation finalized.
+- [ ] launchd plist `plutil -lint` clean; backup-script unit test green.
+- [ ] Bounded stability run completes within 60 minutes with zero unhandled exceptions and metrics within §3.2 targets.
+- [ ] Crash-and-relaunch test passes (RPO=0 for inbound, no duplicates).
+- [ ] Webhook delivery success rate ≥ 95% in the stability run.
+- [ ] Documentation finalized; docs-lint passes (no broken links, code blocks parse).
 - [ ] Runbook prepared.
+- [ ] Blueprint reconciled.
 
 ## 10. Testing Strategy
 
@@ -1358,9 +1366,9 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 | Unit | Envelope normalization (per platform), allowlist filter, HMAC signature, idempotency key dedup, token-bucket math, retry-schedule calculation | pytest, hypothesis (property tests for envelope round-trip) | ≥ 80% line coverage on `amc/core/` |
 | Integration | HTTP routes against ephemeral SQLite, fake Discord gateway, fixture chat.db, fake webhook receiver | pytest, httpx, pytest-asyncio, `respx` (HTTP mocking) | All endpoints + happy/error paths |
 | MCP wrapper unit | Tool input schema, error mapping | vitest or node:test | All 4 tools |
-| MCP wrapper integration | Wrapper → live adapter on test port | MCP Inspector + scripted runs | All 4 tools |
-| End-to-end | Real Discord + real iMessage on target Mac | Manual checklist during soak | Critical paths only |
-| Performance | Receive→visible latency, send→ack latency under representative load | Custom Python load script (10 messages over 60 s, repeat) | P95 < 3 s receive, P95 < 2 s send |
+| MCP wrapper integration | Wrapper subprocess driven by `@modelcontextprotocol/sdk` client → live adapter on test port → Phase 0 fakes | Programmatic SDK harness (no MCP Inspector, no human MCP host) | All 4 tools |
+| End-to-end | Full stack against Phase 0 fakes (fake Discord gateway + fixture chat.db + fake AppleScript shim + in-process webhook receiver) | Pytest E2E suite running in CI on every commit | Four critical paths in §10.2 |
+| Performance | Receive→visible latency, send→ack latency under synthetic load | Bounded stability run (§9.4) recorded as a CI artifact | P95 < 3 s receive, P95 < 2 s send |
 
 ### 10.2 Test Scenarios
 
@@ -1411,9 +1419,10 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 
 ### 10.3 Performance Test Plan
 
-- **Load test**: 60 messages spread over 60 s on Discord (1 msg/s), via a test bot account. Measure P50/P95 receive→visible.
-- **Soak test**: 7 days under normal personal-use traffic. No formal SLA — tolerate any single connector outage of < 10 minutes; alert on outages > 10 minutes via log review.
+- **Load test**: 60 inbound messages spread over 60 s through the fake Discord gateway (1 msg/s). Measure P50/P95 receive→visible.
+- **Bounded stability run**: ≤ 60 minutes (default 30 min) of mixed Discord + iMessage synthetic traffic against the Phase 0 fakes. Asserts: zero unhandled exceptions in logs, no `connector_state` regressions, P95 latencies within §6.1, ≥ 95% first-attempt webhook success against an in-process receiver. This is the v1 acceptance equivalent of a "soak"; it runs in CI without a real Mac or real platform credentials.
 - **Stress test (optional, post-v1)**: 10 msgs/s burst for 30 s; observe rate limiter behavior.
+- **Real-deployment soak (post-handoff, not a build gate)**: An operator may run the system unattended on a real Mac with real Discord + iMessage credentials for an extended period after deployment. This is informational only and is *not* a precondition for declaring v1 complete.
 
 ## 11. Deployment & Operations
 
@@ -1445,15 +1454,15 @@ Configuration is via env vars in `~/.config/messaging-agent/.env`. There are no 
 
 ### 11.3 Monitoring & Alerting
 
-There is no paged alerting in v1. Operator review is via:
+There is no paged alerting in v1. The signals below are **post-handoff operator tooling**, not build-acceptance gates — the v1 build is accepted by automated tests (§9, §10), and a future operator running the system on a real Mac uses these to keep an eye on it.
 
-| Signal | Where | Action |
-|--------|-------|--------|
-| Connector state | `GET /healthz` | Manual daily check during soak; runbook entry per state |
-| Error log volume | `~/Library/Logs/messaging-agent/*.log` (grep `level=error`) | Daily during soak |
+| Signal | Where | Post-handoff action |
+|--------|-------|---------------------|
+| Connector state | `GET /healthz` | Operator spot-checks; runbook entry per state |
+| Error log volume | `~/Library/Logs/messaging-agent/*.log` (grep `level=error`) | Operator periodic review |
 | Dead-lettered webhooks | `webhook_deliveries WHERE status='dead'` | Operator query; runbook entry |
-| `send_failed` messages | `messages WHERE allowlist_status='outbound' AND ...` (status flag TBD per OQ-3) | Manual |
-| Disk usage of attachments | `du -sh ~/Library/Application\ Support/messaging-agent/attachments` | Weekly |
+| `send_failed` messages | `messages WHERE direction='outbound' AND ...` (status flag TBD per OQ-3) | Operator query |
+| Disk usage of attachments | `du -sh ~/Library/Application\ Support/messaging-agent/attachments` | Operator weekly |
 
 ### 11.4 Runbook (sketch — full content lives in `RUNBOOK.md` after Phase 4)
 
@@ -1476,8 +1485,8 @@ There is no paged alerting in v1. Operator review is via:
 | `@modelcontextprotocol/sdk` | External (Anthropic) | Stable | Low — wrapper is small enough to rewrite if SDK churns |
 | FastAPI | External | Stable | Low |
 | Alembic + SQLAlchemy Core | External | Stable | Low |
-| FDA + Automation grants on target Mac | Operator | Pending until Phase 0 spike | Medium — blocks Phase 2 if not navigable |
-| Discord bot token + Message Content intent | Operator (Developer Portal) | Pending | Medium — blocks Phase 1 acceptance |
+| FDA + Automation grants on operator Mac | Operator (deployment-time) | Required at deploy, **not** at build | None for v1 build acceptance — these are exercised by the operator at deployment time only; build acceptance uses fixture chat.db + `FakeAppleScriptSender` |
+| Discord bot token + Message Content intent | Operator (deployment-time) | Required at deploy, **not** at build | None for v1 build acceptance — build acceptance uses the fake Discord gateway + fake REST from Phase 0 |
 
 ### 12.2 Cross-Team Dependencies
 
@@ -1487,14 +1496,14 @@ None. This is a single-operator project.
 
 | # | Risk | Impact | Likelihood | Mitigation Strategy |
 |---|------|--------|------------|---------------------|
-| R-1 | FDA / Automation prompts misbehave on target Mac | High (blocks Phase 2) | Medium | Phase 0 POC validates these before any architecture work commits |
+| R-1 | FDA / Automation prompts misbehave on the operator's Mac at deployment time | Medium (deployment-time only; does not block v1 build acceptance, which uses fixtures) | Medium | `RUNBOOK.md` covers the prompt flow and recovery; build-time is insulated by the `FakeAppleScriptSender` and fixture chat.db |
 | R-2 | discord.py rate-limit handling differs from documented behavior under bursty sends | Medium | Low | Token-bucket on adapter side dampens; integration test at 5 msgs/5s |
 | R-3 | chat.db schema changes in a future macOS release | Medium (post-ship) | Low | Tests pin to current schema; `raw_json` preserves the original row for forensics; runbook entry on how to detect & adapt |
 | R-4 | Per-agent cursor implementation introduces a hot index that doesn't scale beyond a few agents | Low (we have ≤ 5 agents) | Low | Composite index on `message_reads(agent_id, message_id)`; scale path is partitioning if it ever matters |
 | R-5 | Attachment re-hosting fills disk during a media-heavy week | Medium | Low | 90-day retention sweeper; runbook entry; can lower retention via env |
 | R-6 | Webhook receiver loops on 5xx, exhausting retries needlessly | Low | Medium | Capped at 5 attempts; dead-letter is durable; receiver behavior is operator's problem |
 | R-7 | Bearer token leaks via environment dump or process list | High | Low | `.env` mode 600; never logged (redactor); rotate by editing `.env` + restart |
-| R-8 | Mac sleeps mid-soak, breaking the 7-day metric | Low | High without mitigation | Document `caffeinate -dimsu`; recommend Battery → "Prevent automatic sleeping" |
+| R-8 | Mac sleeps during real-deployment use, halting the iMessage poller | Low (post-handoff only; v1 build acceptance does not depend on a real Mac being awake) | High without mitigation | Document `caffeinate -dimsu` and Battery → "Prevent automatic sleeping" in `SETUP.md`; runbook entry for catching up after an unintended sleep |
 | R-9 | MCP SDK breaking change between Phase 3 build and v1 ship | Low | Low | Pin SDK version in wrapper `package.json` |
 | R-10 | Identity-link `person_id` typo causes split-brain (one human appears as two) | Low | Medium | Allowlist load validates uniqueness of `(source, id)`; logs warn on `person_id` referenced from a single entry |
 | R-11 | iMessage `attributedBody` encoding change (already a known landmine in chat.db) | Medium | Low | Use the proven decode path from the reference code; preserve raw bytes in `raw_json` |
@@ -1504,7 +1513,7 @@ None. This is a single-operator project.
 | # | Question | Owner | Due Date | Resolution |
 |---|----------|-------|----------|------------|
 | OQ-1 | Should `mark_read` return `marked_count` = total IDs marked, or only IDs newly marked in this call? | Owner-Operator | Phase 1 implementation | TBD — pick one; document either way |
-| OQ-2 | Should the webhook fire on outbound (agent-sent) messages too, for fan-out to logging? | Owner-Operator | Phase 4 | Defaulting to "no" in v1; revisit during soak |
+| OQ-2 | Should the webhook fire on outbound (agent-sent) messages too, for fan-out to logging? | Owner-Operator | Phase 4 | Defaulting to "no" in v1; revisit post-v1 |
 | OQ-3 | Outbound `messages` row needs a status field (`pending`, `sent`, `send_failed`). Add a column or piggyback on `allowlist_status`? | Owner-Operator | Phase 1 | Lean toward a separate `delivery_status` column; finalize during schema review |
 | OQ-4 | When the allowlist file is reloaded via SIGHUP and a sender's `allowlist_status` flips from `unknown` to `allowed`, do their existing quarantined messages migrate to `/messages/unread`? | Owner-Operator | Phase 1 | Default: no migration (avoids surprise floods); documented in `SETUP.md` |
 | OQ-5 | Idempotency-Key collision across agents (two agents both pick UUID X by accident) — return cached response or 422? | Owner-Operator | Phase 1 | Lean toward 422 with `IDEMPOTENCY_KEY_REUSE` since collision is a client bug at any scale |
@@ -1566,6 +1575,7 @@ These divergences from `internal/blueprints/agent-messaging-channel.md` must be 
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2026-05-02 | Stephen Sequenzia | Initial version generated by SDD Tools (`create-spec`) interview against the AMC blueprint |
+| 1.1 | 2026-05-03 | Stephen Sequenzia | Removed all human-in-the-loop acceptance gates so v1 can be built autonomously by AI agents. Phase 0 reframed from "spike POC requiring FDA + Automation + real iMessage contact" to "build the test fixtures and platform stubs (fixture `chat.db`, `FakeAppleScriptSender`, fake Discord gateway) that all later phases use." Phase 1, 2, 3 round-trip acceptance now runs against those fakes — no real Discord bot token, no real Apple ID, no real Mac permissions. Phase 3 swaps MCP Inspector + Claude Code interactive verification for an automated `@modelcontextprotocol/sdk` client harness. Phase 4 replaces the 7-day soak and "teammate cold install in 60 minutes" gate with a bounded automated stability run (≤ 60 minutes) plus a crash-and-relaunch test. FDA/Automation/Discord-token reframed as deployment-time prerequisites instead of build dependencies. R-1/R-8 risk rows reframed as deployment-time only. Operator monitoring signals (§11.3) marked as post-handoff tooling. |
 
 ---
 
