@@ -6,5 +6,10 @@
   "enableAllProjectMcpServers": true,
   "enabledMcpjsonServers": [
     "context7"
-  ]
+  ],
+  "enabledPlugins": {
+    "playwright@claude-plugins-official": true,
+    "mcp-server-dev@claude-plugins-official": true,
+    "pydantic-ai@claude-plugins-official": true
+  }
 }
