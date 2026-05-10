@@ -37,6 +37,9 @@ build-backend = "uv_build"
 [tool.uv.build-backend]
 module-root = ""
 
+[tool.uv.workspace]
+members = ["mcp"]
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"

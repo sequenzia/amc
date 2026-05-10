@@ -25,9 +25,9 @@ The MCP wrapper ships **stdio-only** in v1. The HTTP MCP transport is explicitly
 
 Concrete consequences:
 
-- The wrapper is published as an executable that reads/writes MCP frames on stdin/stdout (the default for `@modelcontextprotocol/sdk` stdio servers).
+- The wrapper is published as a Python console script (`amc-mcp`) that reads/writes MCP frames on stdin/stdout (the default for `mcp` Python SDK stdio servers).
 - Agent runtimes spawn one wrapper process per session. Process lifetime is bound to the session; no daemon mode.
-- The wrapper validates Phase-3 acceptance via an automated `@modelcontextprotocol/sdk` **client** harness that spawns the wrapper as a subprocess and round-trips every tool against the adapter — no real MCP host, no MCP Inspector, and no human-driven verification (see ADR 0007 and spec §9.3).
+- The wrapper validates Phase-3 acceptance via an automated `mcp.client.stdio` **client** harness that spawns the wrapper as a subprocess and round-trips every tool against the adapter — no real MCP host, no MCP Inspector, and no human-driven verification (see ADR 0007 and spec §9.3).
 - Configuration (`AMC_BASE_URL`, bearer token, `X-Agent-ID` to send on calls) is injected via env vars at spawn time, in keeping with how MCP hosts already configure stdio servers.
 - The HTTP transport, if/when added post-v1, will be additive: same four tools, same JSON shapes, just a different transport. Spec §15 lists this under future work.
 

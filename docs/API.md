@@ -4,7 +4,7 @@ Cross-reference: this document expands the contract defined in
 [`specs/agent-messaging-channel-SPEC.md` §7.4](../specs/agent-messaging-channel-SPEC.md#74-api-specifications)
 ("API Specifications") and §7.4.7 (MCP tool surface). It is regenerated from the
 FastAPI app's OpenAPI schema (`amc.app.app.openapi()`) plus a hand-written MCP
-section that mirrors the zod schemas in `mcp-wrapper/src/tools/*.ts`.
+section that mirrors the Pydantic input models in `mcp/src/amc_mcp/tools/*.py`.
 
 The adapter exposes two parallel surfaces:
 
@@ -12,7 +12,7 @@ The adapter exposes two parallel surfaces:
    (configurable via `AMC_BIND_HOST` / `AMC_BIND_PORT`). Every route is gated
    by an `Authorization: Bearer <token>` header; per-agent read endpoints
    additionally require an `X-Agent-ID: <name>` header.
-2. **MCP** — a thin TypeScript wrapper (`mcp-wrapper/`) that exposes four
+2. **MCP** — a thin Python wrapper (`mcp/`, FastMCP) that exposes four
    tools to MCP-speaking agents and translates each call into one HTTP
    request against the REST surface. The wrapper injects bearer / agent-id
    headers and an `Idempotency-Key` for `send_message`.
@@ -511,12 +511,12 @@ models in the route modules.
 
 ## 4. MCP Tool Surface
 
-Cross-reference: spec §7.4.7. The MCP wrapper (`mcp-wrapper/src/tools/*.ts`)
+Cross-reference: spec §7.4.7. The MCP wrapper (`mcp/src/amc_mcp/tools/*.py`)
 exposes exactly four tools that map 1:1 to REST endpoints. Each tool is a
-self-contained module exporting `{ name, description, inputSchema, handler }`;
-none of them contain platform-specific code (no Discord / AppleScript /
-chat.db imports). Input is validated by zod both at the framework boundary
-and inside the handler so direct callers (tests) get the same guarantees.
+self-contained module that registers a `@mcp.tool()` handler with a Pydantic
+input schema; none contain platform-specific code (no Discord / AppleScript /
+chat.db imports). Input is validated by Pydantic at the framework boundary;
+unit tests exercise the same handlers directly with a fake HTTP client.
 
 The wrapper injects the bearer token and `X-Agent-ID` headers from
 `AMC_BEARER_TOKEN` / `AMC_AGENT_ID` env vars, and generates a fresh UUIDv4

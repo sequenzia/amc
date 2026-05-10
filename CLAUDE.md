@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository State
 
-**v1 implementation complete (2026-05-03).** Full Python adapter (FastAPI + SQLAlchemy + Alembic) + iMessage and Discord connectors + TypeScript MCP wrapper + ops scripts + tests + docs. The spec (`specs/agent-messaging-channel-SPEC.md`) is the source of truth for v1; the blueprint (`internal/blueprints/agent-messaging-channel.md`) has been reconciled twice.
+**v1 implementation complete (2026-05-03; MCP wrapper ported from TypeScript to Python 2026-05-09).** Full Python adapter (FastAPI + SQLAlchemy + Alembic) + iMessage and Discord connectors + Python MCP wrapper (uv workspace member at `mcp/`) + ops scripts + tests + docs. The spec (`specs/agent-messaging-channel-SPEC.md`) is the source of truth for v1; the blueprint (`internal/blueprints/agent-messaging-channel.md`) has been reconciled twice.
 
 ### Build / lint / test commands
 
-**Python (root):**
-- Install: `uv sync`
+**Adapter (root):**
+- Install all (incl. wrapper): `uv sync --all-packages`
 - Run app: `uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080`
 - Migrate: `uv run alembic upgrade head`
 - Lint: `uv run ruff check . && uv run ruff format --check .`
@@ -17,12 +17,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Stability: `uv run pytest tests/stability/test_stability_run.py` (default 60s; `AMC_STABILITY_DURATION_SECONDS=1800` for 30 min)
 - Docs lint: `make docs-lint` (or `uv run python scripts/docs_lint.py`)
 
-**TypeScript (`mcp-wrapper/`):**
-- Install: `cd mcp-wrapper && npm install`
-- Build: `npm run build` (outputs `dist/`)
-- Test: `npm test`
-- Lint: `npm run lint`
-- Import audit: `node scripts/import-audit.mjs` (no platform-specific identifiers in dist)
+**MCP wrapper (`mcp/`):**
+- Run: `uv run --project mcp amc-mcp` (stdio MCP server)
+- Test: `uv run --project mcp pytest`
+- Lint: `uv run --project mcp ruff check . && uv run --project mcp ruff format --check .`
+- Import audit: `uv run --project mcp python scripts/import_audit.py` (no platform-specific imports)
 
 ### Critical domain knowledge baked into the codebase
 
@@ -68,7 +67,7 @@ Agent  ──MCP──►  MCP Wrapper  ──HTTP──►  Adapter HTTP API  �
 ```
 
 * **Adapter HTTP API** — the source of truth. A single process (FastAPI or Hono) that runs both connectors as background tasks, persists to SQLite, and exposes REST endpoints plus an outbound webhook for new messages. Agents that don't speak MCP hit this directly.
-* **MCP Wrapper** — a thin TypeScript layer using `@modelcontextprotocol/sdk` that translates four tools (`list_unread_messages`, `send_message`, `mark_read`, `get_message_context`) into HTTP calls against the adapter. It must contain **no platform-specific code**.
+* **MCP Wrapper** — a thin Python layer using the official `mcp` SDK (FastMCP) that translates four tools (`list_unread_messages`, `send_message`, `mark_read`, `get_message_context`) into HTTP calls against the adapter. Lives at `mcp/` as a uv workspace member; must contain **no platform-specific code** (statically enforced by `mcp/scripts/import_audit.py`).
 * **Connectors** — one per platform. iMessage polls `~/Library/Messages/chat.db` and sends via AppleScript; Discord uses a Gateway WebSocket plus REST.
 
 ### Critical Contracts
@@ -105,7 +104,7 @@ Per blueprint §8, work proceeds Discord-first because it's exercisable end-to-e
 
 The blueprint intentionally leaves these for the user to call:
 
-* **Adapter language**: Python + FastAPI vs. TypeScript + Hono. Per the global CLAUDE.md, ask before picking. The MCP wrapper is fixed at TypeScript regardless.
+* **Adapter language**: settled — Python + FastAPI for the adapter; the MCP wrapper is also Python (FastMCP) since the 2026-05-09 conversion.
 * **Group chat support on iMessage** in v1.
 * **Attachment strategy**: pass-through vs. adapter-rehosted (Discord CDN URLs expire; iMessage attachments are local file paths — neither is a stable URL the agent can hand back).
 * **Multi-agent contention** on a single adapter (per-agent cursors vs. leasing). Single-agent is the v1 default.
@@ -115,7 +114,7 @@ See blueprint §9 for the full list.
 ## Reference Code (external)
 
 * iMessage connector starting point — `https://github.com/anthropics/claude-plugins-official/tree/main/external_plugins/imessage` (lift platform code, drop the MCP scaffolding)
-* MCP TypeScript SDK — `https://github.com/modelcontextprotocol/typescript-sdk`
+* MCP Python SDK — `https://github.com/modelcontextprotocol/python-sdk`
 * `discord.js` — recommended over the Anthropic Discord plugin for the connector
 
 ## Working Conventions for This Repo

@@ -72,6 +72,30 @@ document the drift in the blueprint reconciliation note.
 
 ---
 
+---
+
+## D-3: MCP wrapper language — TypeScript → Python (resolved 2026-05-09)
+
+**Resolution**: spec amended to Python. Not a divergence; recorded here for
+audit only.
+
+The spec's original Phase-3 language pick (`@modelcontextprotocol/sdk`,
+TypeScript, Node 20+/Bun) was an early default rather than a load-bearing
+constraint. v1.2 of the spec replaces it with the official `mcp` Python SDK
+(FastMCP), and the implementation lives at `mcp/` as a uv workspace member.
+Wrapper config (`AMC_BASE_URL` / `AMC_BEARER_TOKEN` / `AMC_AGENT_ID`),
+the four-tool surface, the §7.4.12 error envelope, and the import-audit
+contract are all unchanged. Operator setup loses its Node/Bun prerequisite.
+
+Updated surfaces: spec §1, §5.6, §7.2 tech-stack rows, §7.4.7 phrasing,
+§9.3 Phase-3 deliverables, §10.1 test-strategy rows, §10.7 R-9 risk row,
+§15.2 glossary, §15.5 references, §15.4 changelog (1.2 row).
+
+No code-side migration needed beyond replacing `mcp-wrapper/` with `mcp/`;
+the four MCP tools and adapter REST endpoints are byte-identical.
+
+---
+
 ## How to resolve
 
 When ready to close these out:

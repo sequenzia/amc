@@ -4,7 +4,7 @@ The Agent Messaging Channel (AMC) is a personal-scale messaging gateway that
 exposes the same four-tool MCP surface (and an equivalent REST surface) over
 both iMessage and Discord, normalizing their very different I/O models behind a
 single message envelope. v1 ships as a Python+FastAPI adapter on macOS,
-supervised by `launchd`, with a thin TypeScript MCP wrapper for stdio-based
+supervised by `launchd`, with a thin Python MCP wrapper for stdio-based
 clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) and a
 documented direct-HTTP path for non-MCP consumers. The system is built
 decoupled-by-design so that swapping the agent framework, the MCP wrapper, or
@@ -28,7 +28,7 @@ flowchart TD
     end
 
     subgraph mcp["MCP Layer (stdio)"]
-        MW[MCP Wrapper<br/>TypeScript]:::secondary
+        MW[MCP Wrapper<br/>Python]:::secondary
     end
 
     subgraph adapter["Adapter Process (FastAPI)"]
@@ -112,26 +112,26 @@ The Python adapter under `amc/` is the source of truth: it owns the SQLite
 store, runs the iMessage and Discord connectors as background tasks, and
 exposes the REST surface plus the outbound webhook described in spec §5 / §7.4.
 
-### MCP Wrapper (TypeScript)
+### MCP Wrapper (Python)
 
-The TypeScript MCP wrapper lives in [`mcp-wrapper/`](mcp-wrapper/) alongside
-the Python adapter. It is a thin layer that translates the four MCP tools
+The Python MCP wrapper lives in [`mcp/`](mcp/) alongside the adapter as a
+uv workspace member. It is a thin layer that translates the four MCP tools
 (`list_unread_messages`, `send_message`, `mark_read`, `get_message_context`)
 into HTTP calls against the adapter — see spec §5.6 / §7.4.7.
 
-Quick start (from `mcp-wrapper/`):
+Quick start (from the repo root):
 
 ```bash
-npm install
-npm run build      # produces dist/index.js
-npm test           # vitest smoke + initialize-handshake tests
-npm run lint
-node dist/index.js # launches the stdio MCP server
+uv sync --all-packages                     # installs adapter + wrapper
+uv run --project mcp pytest                # full wrapper test suite
+uv run --project mcp ruff check .          # lint
+uv run --project mcp python scripts/import_audit.py
+uv run --project mcp amc-mcp               # launches the stdio MCP server
 ```
 
-Compatible with Node 20+ and Bun. The bundle has zero platform-specific
-imports (no Discord SDK, no AppleScript / chat.db references); a build-time
-test asserts this.
+The wrapper has zero platform-specific imports (no Discord SDK, no
+AppleScript / chat.db references); the import-audit script asserts this
+statically.
 
 ## Status
 

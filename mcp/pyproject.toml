@@ -1,0 +1,44 @@
+[project]
+name = "amc-mcp"
+version = "0.1.0"
+description = "Thin MCP stdio wrapper that proxies the four AMC tools to the adapter HTTP API."
+authors = [
+    { name = "Stephen Sequenzia", email = "sequenzia@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "mcp>=1.12,<2",
+    "httpx>=0.28.1",
+    "pydantic>=2",
+]
+
+[project.scripts]
+amc-mcp = "amc_mcp.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "respx>=0.23.1",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.21,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]

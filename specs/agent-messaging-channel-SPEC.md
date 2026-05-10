@@ -1,8 +1,8 @@
 # Agent Messaging Channel PRD
 
-**Version**: 1.1
+**Version**: 1.2
 **Author**: Stephen Sequenzia
-**Date**: 2026-05-03
+**Date**: 2026-05-09
 **Status**: Draft
 **Spec Type**: New product
 **Spec Depth**: Full technical documentation
@@ -12,7 +12,7 @@
 
 ## 1. Executive Summary
 
-The Agent Messaging Channel (AMC) is a personal-scale messaging gateway that exposes the same four-tool MCP surface (and an equivalent REST surface) over both iMessage and Discord, normalizing their very different I/O models behind a single message envelope. v1 ships as a Python+FastAPI adapter on macOS, supervised by `launchd`, with a thin TypeScript MCP wrapper for stdio-based clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) and a documented direct-HTTP path for non-MCP consumers. The system is built decoupled-by-design so that swapping the agent framework, the MCP wrapper, or either connector requires no changes to the other layers.
+The Agent Messaging Channel (AMC) is a personal-scale messaging gateway that exposes the same four-tool MCP surface (and an equivalent REST surface) over both iMessage and Discord, normalizing their very different I/O models behind a single message envelope. v1 ships as a Python+FastAPI adapter on macOS, supervised by `launchd`, with a thin Python MCP wrapper (FastMCP, official `mcp` SDK) for stdio-based clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) and a documented direct-HTTP path for non-MCP consumers. The system is built decoupled-by-design so that swapping the agent framework, the MCP wrapper, or either connector requires no changes to the other layers.
 
 ## 2. Problem Statement
 
@@ -26,7 +26,7 @@ There is no implementation yet. The repository contains only this PRD's source (
 
 - **iMessage**: `anthropics/claude-plugins-official/external_plugins/imessage` — `chat.db` polling and AppleScript send patterns.
 - **Discord**: `discord.py` (and the equivalent Anthropic Discord plugin as reference, not a dependency).
-- **MCP**: `@modelcontextprotocol/sdk` (TypeScript) for the wrapper.
+- **MCP**: official `mcp` Python SDK (FastMCP) for the wrapper.
 
 Manual interaction with each platform — opening Messages.app, opening Discord — is the current human flow. Automation would otherwise require either a custom per-platform integration per agent framework, or coupling the agent to a single proprietary channel SDK.
 
@@ -83,7 +83,7 @@ This is a personal-tool project; "impact" is measured against the owner's experi
 - **Role/Description**: Single human who owns the Mac, the Apple ID, and the Discord bot. Both author and primary user of the system.
 - **Goals**: Have one AI agent reachable on both iMessage and Discord; experiment with multiple agent frameworks without re-doing channel work; eventually delegate routine messaging to the agent.
 - **Pain Points**: Today, no single agent framework speaks both platforms cleanly. Cross-platform identity is muddy. Setup of platform-side credentials (Discord intents, iMessage permissions) is undocumented and error-prone.
-- **Context**: macOS workstation, technically fluent (Python + TypeScript), prefers `ruff` / `uv` / `pytest` per global standards.
+- **Context**: macOS workstation, technically fluent (Python), prefers `ruff` / `uv` / `pytest` per global standards.
 - **Technical Proficiency**: High.
 
 #### Secondary Persona: The Trusted Circle (5–10 humans)
@@ -361,11 +361,11 @@ The numbering uses `REQ-AMC-NNN`. Priorities: P0 (must ship in v1), P1 (must shi
 **US-006**: As an agent runtime that speaks MCP over stdio (Claude Code, Claude Desktop, Codex CLI, Codex Desktop), I want to invoke `list_unread_messages`, `send_message`, `mark_read`, and `get_message_context` and have each map cleanly to one HTTP call against the adapter.
 
 **Acceptance Criteria**:
-- [ ] Wrapper is TypeScript using `@modelcontextprotocol/sdk`, distributed as an executable invoked via stdio.
+- [ ] Wrapper is Python using the official `mcp` SDK (FastMCP), distributed as a uv workspace member at `mcp/` exposing the `amc-mcp` console script invoked via stdio.
 - [ ] Wrapper imports nothing platform-specific (no Discord SDK, no AppleScript helpers).
 - [ ] Each tool maps to exactly one HTTP call against the adapter (with the bearer token and `X-Agent-ID` set from wrapper env vars).
 - [ ] Wrapper translates HTTP errors to MCP-friendly error responses (no panics or unhandled exceptions reaching the MCP host).
-- [ ] Verified by an automated `@modelcontextprotocol/sdk` client harness (Phase 3 wrapper end-to-end test) that spawns the wrapper as a stdio child and exercises every tool. Compatibility with the four named human-facing clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) is a deployment-time concern, not a build acceptance gate.
+- [ ] Verified by an automated `mcp.client.stdio` client harness (Phase 3 wrapper end-to-end test) that spawns the wrapper as a stdio child and exercises every tool. Compatibility with the four named human-facing clients (Claude Code, Claude Desktop, Codex CLI, Codex Desktop) is a deployment-time concern, not a build acceptance gate.
 - [ ] Wrapper config: `AMC_BASE_URL` (default `http://127.0.0.1:8080`), `AMC_BEARER_TOKEN`, `AMC_AGENT_ID`.
 
 **Tool definitions**: see §7.4.7.
@@ -535,7 +535,7 @@ flowchart TD
     end
 
     subgraph mcp["MCP Layer (stdio)"]
-        MW[MCP Wrapper<br/>TypeScript]:::secondary
+        MW[MCP Wrapper<br/>Python]:::secondary
     end
 
     subgraph adapter["Adapter Process (FastAPI)"]
@@ -604,8 +604,8 @@ flowchart TD
 | ORM/migrations | Alembic + SQLAlchemy Core | Structured migrations from day one; Core (not ORM) for predictable SQL |
 | Discord connector | discord.py | Mature, asyncio-native, matches adapter runtime |
 | iMessage connector | Stdlib `sqlite3` + `subprocess` | Lifted from `anthropics/claude-plugins-official/external_plugins/imessage` |
-| MCP wrapper | TypeScript + `@modelcontextprotocol/sdk` | Official SDK; stdio transport; minimal deps |
-| Wrapper runtime | Node 20+ (or Bun) | Operator's choice; spec-compatible with both |
+| MCP wrapper | Python + official `mcp` SDK (FastMCP) | Official SDK; stdio transport; same toolchain (`uv` / `ruff` / `pytest`) as the adapter; ships as a uv workspace member at `mcp/` |
+| Wrapper runtime | Python 3.12+ (matches adapter) | Single venv; one set of conventions |
 | Local store | SQLite (WAL) + filesystem | Single-host, low volume; no need for Postgres |
 | Process supervision | launchd | Native macOS; survives reboot; logs to `~/Library/Logs/` |
 | Backup | `cp` + launchd timer | Nightly file copy of `amc.db`, retain 7 days |
@@ -1309,17 +1309,17 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 
 ### 9.3 Phase 3: MCP wrapper
 
-**Completion Criteria**: Each of the four MCP tools is exercised end-to-end by an automated test that uses the official `@modelcontextprotocol/sdk` **client** to spawn the wrapper as a stdio child and round-trip every tool against the running adapter (configured against the Phase 0 fakes). Wrapper has zero platform-specific imports. No MCP Inspector and no Claude Code session are required to pass acceptance.
+**Completion Criteria**: Each of the four MCP tools is exercised end-to-end by an automated test that uses the official `mcp` Python SDK's stdio **client** (`mcp.client.stdio.stdio_client`) to spawn the wrapper as a stdio child and round-trip every tool against the running adapter (configured against the Phase 0 fakes). Wrapper has zero platform-specific imports. No MCP Inspector and no Claude Code session are required to pass acceptance.
 
 | Deliverable | Description | Technical Tasks | Dependencies |
 |-------------|-------------|-----------------|--------------|
-| Wrapper project | Node/Bun + TypeScript + `@modelcontextprotocol/sdk` | `package.json`, tsconfig, lint | — |
-| Tool definitions | 4 tools per §7.4.7 | MCP tool registration with input schemas matching adapter request bodies | — |
-| HTTP client | Single shared client | `fetch` with bearer + agent-id headers from env | — |
-| Error mapping | HTTP → MCP errors | Translate adapter error codes to MCP `isError` responses with explanatory `content` | — |
-| Wrapper unit tests | Isolated tool logic | vitest/node:test for input-schema validation, header propagation, error mapping (HTTP fixtures via `msw` or equivalent) | — |
-| Wrapper end-to-end test | Programmatic MCP client → wrapper → adapter | Test harness uses `@modelcontextprotocol/sdk`'s stdio client to launch the wrapper as a subprocess, then invokes each of the four tools against the adapter (which is itself wired to the Phase 0 fakes) and asserts the responses | Phase 2 done |
-| Import audit | Static check that the wrapper has no platform-specific deps | A repo script (or simple test) greps the wrapper's compiled output / dependency graph for `discord*`, `applescript`, `osascript`, `chat.db` and fails the build on any hit | — |
+| Wrapper project | Python 3.12 + official `mcp` SDK (FastMCP) | `mcp/pyproject.toml`, ruff config, console_script `amc-mcp` | — |
+| Tool definitions | 4 tools per §7.4.7 | `@mcp.tool()` registrations with Pydantic input schemas matching adapter request bodies | — |
+| HTTP client | Single shared client | `httpx.AsyncClient` with bearer + agent-id headers from env | — |
+| Error mapping | HTTP → MCP errors | Translate adapter error codes to `CallToolResult(isError=True)` with explanatory text content | — |
+| Wrapper unit tests | Isolated tool logic | pytest for input-schema validation, header propagation, error mapping (HTTP fixtures via `respx` and `httpx.MockTransport`) | — |
+| Wrapper end-to-end test | Programmatic MCP client → wrapper → adapter | Test harness uses `mcp.client.stdio.stdio_client` to launch the wrapper as a subprocess, then invokes each of the four tools against the adapter (or a stdlib mock adapter wired to the Phase 0 fakes) and asserts the responses | Phase 2 done |
+| Import audit | Static check that the wrapper has no platform-specific deps | `mcp/scripts/import_audit.py` parses each `.py` with `ast` and rejects any import specifier matching `discord`, `applescript`, `osascript`, `chat.db`, `imessage` | — |
 
 **Checkpoint Gate**:
 - [ ] All 4 tools verified by the automated MCP-SDK client harness; per-tool assertion on response shape and (where applicable) side effects in the adapter (e.g. `mark_read` produced a `message_reads` row).
@@ -1365,8 +1365,8 @@ This section is intentionally empty: AMC is a new product with no prior code to 
 |-------|-------|-------|-----------------|
 | Unit | Envelope normalization (per platform), allowlist filter, HMAC signature, idempotency key dedup, token-bucket math, retry-schedule calculation | pytest, hypothesis (property tests for envelope round-trip) | ≥ 80% line coverage on `amc/core/` |
 | Integration | HTTP routes against ephemeral SQLite, fake Discord gateway, fixture chat.db, fake webhook receiver | pytest, httpx, pytest-asyncio, `respx` (HTTP mocking) | All endpoints + happy/error paths |
-| MCP wrapper unit | Tool input schema, error mapping | vitest or node:test | All 4 tools |
-| MCP wrapper integration | Wrapper subprocess driven by `@modelcontextprotocol/sdk` client → live adapter on test port → Phase 0 fakes | Programmatic SDK harness (no MCP Inspector, no human MCP host) | All 4 tools |
+| MCP wrapper unit | Tool input schema, error mapping | pytest + respx | All 4 tools |
+| MCP wrapper integration | Wrapper subprocess driven by `mcp.client.stdio.stdio_client` → live adapter on test port → Phase 0 fakes | Programmatic SDK harness (no MCP Inspector, no human MCP host) | All 4 tools |
 | End-to-end | Full stack against Phase 0 fakes (fake Discord gateway + fixture chat.db + fake AppleScript shim + in-process webhook receiver) | Pytest E2E suite running in CI on every commit | Four critical paths in §10.2 |
 | Performance | Receive→visible latency, send→ack latency under synthetic load | Bounded stability run (§9.4) recorded as a CI artifact | P95 < 3 s receive, P95 < 2 s send |
 
@@ -1482,7 +1482,7 @@ There is no paged alerting in v1. The signals below are **post-handoff operator 
 |------------|-------|--------|-----------------|
 | Reference iMessage code (`anthropics/claude-plugins-official/external_plugins/imessage`) | External (Anthropic) | Available | Low — code is reference, not a runtime dep |
 | `discord.py` library | External | Stable | Low — alternative is `disnake` or raw `aiohttp` |
-| `@modelcontextprotocol/sdk` | External (Anthropic) | Stable | Low — wrapper is small enough to rewrite if SDK churns |
+| `mcp` (Python SDK) | External (Anthropic) | Stable | Low — wrapper is small enough to rewrite if SDK churns |
 | FastAPI | External | Stable | Low |
 | Alembic + SQLAlchemy Core | External | Stable | Low |
 | FDA + Automation grants on operator Mac | Operator (deployment-time) | Required at deploy, **not** at build | None for v1 build acceptance — these are exercised by the operator at deployment time only; build acceptance uses fixture chat.db + `FakeAppleScriptSender` |
@@ -1504,7 +1504,7 @@ None. This is a single-operator project.
 | R-6 | Webhook receiver loops on 5xx, exhausting retries needlessly | Low | Medium | Capped at 5 attempts; dead-letter is durable; receiver behavior is operator's problem |
 | R-7 | Bearer token leaks via environment dump or process list | High | Low | `.env` mode 600; never logged (redactor); rotate by editing `.env` + restart |
 | R-8 | Mac sleeps during real-deployment use, halting the iMessage poller | Low (post-handoff only; v1 build acceptance does not depend on a real Mac being awake) | High without mitigation | Document `caffeinate -dimsu` and Battery → "Prevent automatic sleeping" in `SETUP.md`; runbook entry for catching up after an unintended sleep |
-| R-9 | MCP SDK breaking change between Phase 3 build and v1 ship | Low | Low | Pin SDK version in wrapper `package.json` |
+| R-9 | MCP SDK breaking change between Phase 3 build and v1 ship | Low | Low | Pin `mcp>=1.12,<2` in `mcp/pyproject.toml` |
 | R-10 | Identity-link `person_id` typo causes split-brain (one human appears as two) | Low | Medium | Allowlist load validates uniqueness of `(source, id)`; logs warn on `person_id` referenced from a single entry |
 | R-11 | iMessage `attributedBody` encoding change (already a known landmine in chat.db) | Medium | Low | Use the proven decode path from the reference code; preserve raw bytes in `raw_json` |
 
@@ -1535,7 +1535,7 @@ None. This is a single-operator project.
 | HMAC | Hash-based Message Authentication Code; AMC uses HMAC-SHA256 for webhook body signatures (`X-AMC-Signature`) |
 | Idempotency-Key | UUID header on non-idempotent POSTs; lets the adapter dedupe retries |
 | MCP | Model Context Protocol — the agent-to-tool standard the wrapper implements |
-| MCP wrapper | Thin TypeScript layer translating MCP tool calls into adapter HTTP calls |
+| MCP wrapper | Thin Python layer (FastMCP) translating MCP tool calls into adapter HTTP calls |
 | Per-agent cursor | Read-state model where each `X-Agent-ID` has its own view of "unread" |
 | `person_id` | Optional allowlist field that links the same human across platforms |
 | Quarantine | Storage state for non-allowlisted inbound messages — saved but invisible to agents |
@@ -1553,7 +1553,7 @@ None. This is a single-operator project.
 - Blueprint (source of truth, this spec extends): `internal/blueprints/agent-messaging-channel.md`
 - iMessage connector starting point: https://github.com/anthropics/claude-plugins-official/tree/main/external_plugins/imessage
 - Discord channel plugin (reference, not a dependency): https://github.com/anthropics/claude-plugins-official/tree/main/external_plugins/discord
-- MCP TypeScript SDK: https://github.com/modelcontextprotocol/typescript-sdk
+- MCP Python SDK: https://github.com/modelcontextprotocol/python-sdk
 - Discord developer documentation: https://discord.com/developers/docs
 - `discord.py`: https://discordpy.readthedocs.io/
 - FastAPI: https://fastapi.tiangolo.com/
@@ -1576,6 +1576,7 @@ These divergences from `internal/blueprints/agent-messaging-channel.md` must be 
 |---------|------|--------|---------|
 | 1.0 | 2026-05-02 | Stephen Sequenzia | Initial version generated by SDD Tools (`create-spec`) interview against the AMC blueprint |
 | 1.1 | 2026-05-03 | Stephen Sequenzia | Removed all human-in-the-loop acceptance gates so v1 can be built autonomously by AI agents. Phase 0 reframed from "spike POC requiring FDA + Automation + real iMessage contact" to "build the test fixtures and platform stubs (fixture `chat.db`, `FakeAppleScriptSender`, fake Discord gateway) that all later phases use." Phase 1, 2, 3 round-trip acceptance now runs against those fakes — no real Discord bot token, no real Apple ID, no real Mac permissions. Phase 3 swaps MCP Inspector + Claude Code interactive verification for an automated `@modelcontextprotocol/sdk` client harness. Phase 4 replaces the 7-day soak and "teammate cold install in 60 minutes" gate with a bounded automated stability run (≤ 60 minutes) plus a crash-and-relaunch test. FDA/Automation/Discord-token reframed as deployment-time prerequisites instead of build dependencies. R-1/R-8 risk rows reframed as deployment-time only. Operator monitoring signals (§11.3) marked as post-handoff tooling. |
+| 1.2 | 2026-05-09 | Stephen Sequenzia | MCP wrapper language change: TypeScript (`@modelcontextprotocol/sdk`) → Python (official `mcp` SDK / FastMCP). Wrapper relocated from `mcp-wrapper/` (Node project) to `mcp/` (uv workspace member). All four tool semantics, REST endpoints, env vars (`AMC_BASE_URL` / `AMC_BEARER_TOKEN` / `AMC_AGENT_ID`), error mapping, and acceptance criteria are unchanged. Updated §5.6, §7.2 tech-stack rows, §7.4.7 phrasing, §9.3 Phase-3 deliverables, §10.1 test-strategy rows, §10.7 R-9 risk row, §15.2 glossary, §15.5 references. Rationale: collapse parallel Node/Python toolchains; share `uv` / `ruff` / `pytest`; remove Node prerequisite from operator setup. |
 
 ---
 

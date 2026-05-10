@@ -127,7 +127,7 @@ This envelope is what the adapter HTTP API returns, what the MCP wrapper relays,
 
 ## 5. Adapter HTTP API
 
-A single FastAPI (Python) or Hono (TypeScript) process that runs both connectors as background tasks and exposes a unified REST surface. SQLite handles persistence.
+A single FastAPI (Python) process that runs both connectors as background tasks and exposes a unified REST surface. SQLite handles persistence. (v1 settled on Python; the Hono/TypeScript option from earlier blueprint drafts is no longer on the table.)
 
 ### 5.1 Endpoints
 
@@ -183,7 +183,7 @@ SQLite tables (post-Phase 1, reconciled with spec §7.3.2/§7.3.3):
 
 ## 6. MCP Wrapper
 
-A thin TypeScript MCP server (using `@modelcontextprotocol/sdk`) that imports nothing platform-specific. It only knows how to make HTTP calls to the adapter.
+A thin Python MCP server (using the official `mcp` SDK / FastMCP) that imports nothing platform-specific. It only knows how to make HTTP calls to the adapter. Lives at `mcp/` as a uv workspace member.
 
 ### 6.1 Tool Surface
 
@@ -305,7 +305,7 @@ Build the HTTP API skeleton, storage schema, and Discord connector. Validate end
 Lift code from the Claude Code plugin, adapt to the normalized envelope, wire into the same adapter. Test the AppleScript send path against `FakeAppleScriptSender` and the chat.db read path against the fixture DB. Operator-side FDA + Automation flow is documented in `SETUP.md` for deployment time, not exercised at build time.
 
 **Phase 3: MCP wrapper**
-Four tools, each a thin HTTP call. Verify with an automated `@modelcontextprotocol/sdk` client harness; MCP Inspector and a live agent host are operator activities, not build-acceptance gates.
+Four tools, each a thin HTTP call. Verify with an automated `mcp.client.stdio` (Python SDK) client harness; MCP Inspector and a live agent host are operator activities, not build-acceptance gates.
 
 **Phase 4: Hardening**
 Webhook delivery with retries, rate limiting on `send_message`, attachment download and re-host, identity linking, observability. Acceptance includes a bounded automated stability run (≤ 60 minutes of synthetic traffic against the Phase 0 fakes) plus a crash-and-relaunch test.
@@ -331,7 +331,7 @@ Still open:
 
 * iMessage connector starting point: `https://github.com/anthropics/claude-plugins-official/tree/main/external_plugins/imessage`
 * Discord channel plugin (reference, not a dependency): `https://github.com/anthropics/claude-plugins-official/tree/main/external_plugins/discord`
-* MCP TypeScript SDK: `https://github.com/modelcontextprotocol/typescript-sdk`
+* MCP Python SDK: `https://github.com/modelcontextprotocol/python-sdk`
 * `discord.js` (recommended for the Discord connector): `https://discord.js.org/`
 
 ---

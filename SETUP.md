@@ -31,15 +31,14 @@ It assumes you are the owner-operator of the host Mac and have admin rights to g
 |-------------|-----|--------------|
 | **macOS** (Apple Silicon or Intel) | The iMessage connector reads `~/Library/Messages/chat.db` and drives Messages.app via AppleScript — both macOS-only. | `sw_vers` |
 | **Python 3.12 or newer** | Adapter uses stdlib `tomllib` and 3.12-only typing features. The repo pins to 3.12 via `.python-version`; `uv` will fetch a matching interpreter for you. | `python3 --version` |
-| **Node.js 20+** (or **Bun**) | The MCP wrapper is TypeScript distributed as ESM under `mcp-wrapper/dist/`. Node 20 is the minimum declared in `mcp-wrapper/package.json`. | `node --version` |
-| **`uv`** (Python package manager) | The repo standardises on `uv` for dependency resolution and execution. | `which uv` |
+| **`uv`** (Python package manager) | The repo standardises on `uv` for dependency resolution and execution. The MCP wrapper is a Python uv workspace member at `mcp/` — no Node toolchain required. | `which uv` |
 | **A working Apple ID signed into Messages.app** | iMessage send and receive requires an active iMessage account on the host. | Open Messages.app → Settings → iMessage account is enabled. |
 | **A Discord account** with permission to create an Application | You will register a bot user and invite it to one server. | Log into <https://discord.com/developers>. |
 
 Install the missing pieces (Homebrew is the easy path):
 
 ```bash
-brew install uv node       # or `brew install uv oven-sh/bun/bun`
+brew install uv
 ```
 
 The adapter does **not** require Docker, a database server, or any other Mac to be reachable. SQLite is on-disk; everything binds to `127.0.0.1:8080` by default.
@@ -54,32 +53,18 @@ mkdir -p ~/code && cd ~/code
 git clone <repo-url> amc
 cd amc
 
-# Install Python deps into a uv-managed venv (.venv at repo root).
-uv sync
-
-# Build the MCP wrapper (TypeScript → JS in dist/).
-cd mcp-wrapper
-npm install
-npm run build
-cd ..
+# Install adapter + MCP wrapper deps into a uv-managed venv (.venv at repo root).
+# The wrapper is a uv workspace member at `mcp/`; --all-packages installs both.
+uv sync --all-packages
 ```
 
-`uv sync` reads `pyproject.toml` + `uv.lock` and produces `.venv/`. After this you can run any Python entry point with `uv run <cmd>`.
-
-If you prefer Bun for the wrapper:
-
-```bash
-cd mcp-wrapper
-bun install
-bun run build
-cd ..
-```
+`uv sync` reads the root `pyproject.toml` + `uv.lock` (and `mcp/pyproject.toml`) and produces `.venv/`. After this you can run any Python entry point with `uv run <cmd>`, and the wrapper's `amc-mcp` console script is on PATH inside the venv.
 
 Verify both layers built:
 
 ```bash
-uv run python -c "import amc; print(amc.__name__)"     # → amc
-test -f mcp-wrapper/dist/index.js && echo "wrapper ok"  # → wrapper ok
+uv run python -c "import amc; print(amc.__name__)"        # → amc
+uv run python -c "import amc_mcp; print(amc_mcp.__name__)"  # → amc_mcp
 ```
 
 > **Install location matters.** The `ops/launchd/install.sh` script burns the absolute path of the repo into `~/Library/LaunchAgents/com.user.amc-adapter.plist`. If you move the repo later you must re-run `install.sh`.
@@ -434,11 +419,11 @@ rm ~/Library/LaunchAgents/com.user.amc-adapter.plist
 
 ## 9. MCP Wrapper Installation
 
-The MCP wrapper is a thin TypeScript stdio process that proxies four MCP tools (`list_unread_messages`, `send_message`, `mark_read`, `get_message_context`) into HTTP calls against the running adapter. It contains no platform-specific code; the adapter is still the source of truth.
+The MCP wrapper is a thin Python stdio process (built on the official `mcp` SDK / FastMCP) that proxies four MCP tools (`list_unread_messages`, `send_message`, `mark_read`, `get_message_context`) into HTTP calls against the running adapter. It contains no platform-specific code; the adapter is still the source of truth.
 
 ### 9.1 Required environment variables
 
-The wrapper reads three env vars at startup (`mcp-wrapper/src/config.ts`):
+The wrapper reads three env vars at startup (`mcp/src/amc_mcp/config.py`):
 
 | Variable | Required? | Notes |
 |----------|-----------|-------|
@@ -448,7 +433,7 @@ The wrapper reads three env vars at startup (`mcp-wrapper/src/config.ts`):
 
 ### 9.2 Wire into your MCP host
 
-The wrapper is invoked as `node /absolute/path/to/mcp-wrapper/dist/index.js` with the env vars above. Concrete examples follow; substitute your absolute install path.
+The wrapper is invoked as `uv --directory /absolute/path/to/amc/mcp run amc-mcp` with the env vars above. (`uv` activates the workspace's `.venv` so the `amc-mcp` console script resolves without modifying the host's PATH.) Concrete examples follow; substitute your absolute install path.
 
 #### Claude Desktop
 
@@ -458,8 +443,8 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add a
 {
   "mcpServers": {
     "amc": {
-      "command": "node",
-      "args": ["/Users/you/code/amc/mcp-wrapper/dist/index.js"],
+      "command": "uv",
+      "args": ["--directory", "/Users/you/code/amc/mcp", "run", "amc-mcp"],
       "env": {
         "AMC_BEARER_TOKEN": "<paste token from ~/.config/messaging-agent/.env>",
         "AMC_AGENT_ID": "claude-desktop-default",
@@ -480,8 +465,8 @@ Add a server entry to `~/.config/claude-code/mcp.json` (create the file if it do
 {
   "mcpServers": {
     "amc": {
-      "command": "node",
-      "args": ["/Users/you/code/amc/mcp-wrapper/dist/index.js"],
+      "command": "uv",
+      "args": ["--directory", "/Users/you/code/amc/mcp", "run", "amc-mcp"],
       "env": {
         "AMC_BEARER_TOKEN": "<token>",
         "AMC_AGENT_ID": "claude-code-laptop"
@@ -491,7 +476,7 @@ Add a server entry to `~/.config/claude-code/mcp.json` (create the file if it do
 }
 ```
 
-Or run `claude mcp add amc node /Users/you/code/amc/mcp-wrapper/dist/index.js` and then `claude mcp env amc set AMC_BEARER_TOKEN=... AMC_AGENT_ID=claude-code-laptop`.
+Or run `claude mcp add amc uv -- --directory /Users/you/code/amc/mcp run amc-mcp` and then `claude mcp env amc set AMC_BEARER_TOKEN=... AMC_AGENT_ID=claude-code-laptop`.
 
 #### Codex CLI
 
@@ -499,37 +484,37 @@ Edit `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.amc]
-command = "node"
-args = ["/Users/you/code/amc/mcp-wrapper/dist/index.js"]
+command = "uv"
+args = ["--directory", "/Users/you/code/amc/mcp", "run", "amc-mcp"]
 
 [mcp_servers.amc.env]
 AMC_BEARER_TOKEN = "<token>"
 AMC_AGENT_ID = "codex-cli"
 ```
 
-#### Bun runtime
+#### Direct binary invocation
 
-If you prefer Bun: replace `"command": "node"` with `"command": "bun"` and `"args": ["run", "/path/to/dist/index.js"]`. The wrapper is ESM and runtime-agnostic.
+If your MCP host doesn't tolerate `uv` as the spawn command, point it at the absolute venv path instead: `command = "/Users/you/code/amc/.venv/bin/amc-mcp"`. The console script imports `amc_mcp` from the venv and works identically. The `uv` form is preferred because it survives `uv sync --reinstall`.
 
 ### 9.3 Smoke-test the wrapper outside an MCP host
 
-Before debugging in your MCP host, confirm the wrapper itself works. Pipe an `initialize` + `tools/list` JSON-RPC sequence into stdin:
+Before debugging in your MCP host, confirm the wrapper itself works. Pipe an `initialize` JSON-RPC line through stdin and confirm the response:
 
 ```bash
-AMC_BEARER_TOKEN=$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-) \
-AMC_AGENT_ID=smoke-test \
-node mcp-wrapper/dist/index.js < /dev/null
+printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}\n' \
+  | AMC_BEARER_TOKEN=$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-) \
+    AMC_AGENT_ID=smoke-test \
+    uv --directory /Users/you/code/amc/mcp run amc-mcp \
+  | head -1
 ```
 
-The process should hold open (it's waiting on stdin). If it instead crashes with `WrapperConfigError: Missing required env var(s): ...`, your env vars aren't reaching the process. `Ctrl-C` to exit.
+You should see a single JSON line containing `"serverInfo":{"name":"amc-mcp","version":"0.1.0"}`. If it instead prints `WrapperConfigError: Missing required env var(s): ...`, your env vars aren't reaching the process.
 
-For an interactive end-to-end check, install Anthropic's `@modelcontextprotocol/inspector`:
+For an interactive end-to-end check, the official Anthropic Inspector still works (it spawns any MCP server and gives you a browser UI to click through tools):
 
 ```bash
-npx @modelcontextprotocol/inspector node mcp-wrapper/dist/index.js
+npx @modelcontextprotocol/inspector uv --directory /Users/you/code/amc/mcp run amc-mcp
 ```
-
-The Inspector spawns the wrapper, completes the MCP handshake, and lets you click through each of the four tools in a browser UI.
 
 ---
 
@@ -612,8 +597,7 @@ Per spec §11.1, the update procedure is:
 ```bash
 cd ~/code/amc        # or wherever you installed
 git pull
-uv sync
-cd mcp-wrapper && npm install && npm run build && cd ..
+uv sync --all-packages
 uv run alembic upgrade head
 launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
 ```
@@ -625,7 +609,7 @@ Reinstall the LaunchAgent (`./ops/launchd/install.sh`) only if `ops/launchd/com.
 ```bash
 uv run alembic downgrade -1   # if a migration is at fault
 git checkout <previous-sha>
-uv sync && cd mcp-wrapper && npm install && npm run build && cd ..
+uv sync --all-packages
 launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
 ```
 
