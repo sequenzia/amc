@@ -268,7 +268,7 @@ async def _start_live_system(
 
     configure_imessage_connector(imessage_connector)
 
-    app = build_app()
+    app = build_app(bootstrap=False)
     client_cm = TestClient(app, raise_server_exceptions=False)
     client = client_cm.__enter__()
 

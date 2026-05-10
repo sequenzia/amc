@@ -179,7 +179,7 @@ def adapter_client(session_factory: async_sessionmaker) -> Iterator[TestClient]:
     configure_bearer_token(BEARER)
     configure_unread_session_factory(session_factory)
 
-    app = build_app()
+    app = build_app(bootstrap=False)
     with TestClient(app, raise_server_exceptions=False) as client:
         yield client
 

@@ -435,7 +435,7 @@ async def test_discord_roundtrip_full_flow(
         configure_idempotency_store(IdempotencyStore(session_factory=session_factory))
         configure_discord_connector(connector)
 
-        adapter_app = build_app()
+        adapter_app = build_app(bootstrap=False)
         adapter_server = _UvicornServer(adapter_app)
         await adapter_server.start()
 

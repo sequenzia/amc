@@ -46,3 +46,4 @@ Thumbs.db
 
 # Claude Code session artifacts (orchestration metadata, not source)
 .claude/sessions/
+amc.code-workspace

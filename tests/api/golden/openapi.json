@@ -408,6 +408,58 @@
         ]
       }
     },
+    "/healthz": {
+      "get": {
+        "description": "Return the spec §7.4.10 health envelope.\n\nBearer is required (router-level dep). No ``X-Agent-ID`` because\n``/healthz`` is operator-facing — per spec §6.2 / §7.4 header table the\noperator role does not carry a per-agent header.",
+        "operationId": "get_healthz_healthz_get",
+        "parameters": [
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Healthz Healthz Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Liveness, connector states, and webhook queue depths.",
+        "tags": [
+          "health"
+        ]
+      }
+    },
     "/messages/context": {
       "get": {
         "description": "``GET /messages/context`` — return chronologically ordered context.\n\nBearer + ``X-Agent-ID`` are enforced by the router-level ``dependencies``.\n``before`` and ``after`` are clamped at ``[0, 50]`` by Pydantic; values\noutside the range surface as the standard ``VALIDATION_FAILED`` envelope\nvia the global handler in :mod:`amc.core.errors`.",

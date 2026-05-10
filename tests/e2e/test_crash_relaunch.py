@@ -256,7 +256,7 @@ async def _start_live_system(
 
     configure_discord_connector(discord_connector)
 
-    app = build_app()
+    app = build_app(bootstrap=False)
     client_cm = TestClient(app, raise_server_exceptions=False)
     client = client_cm.__enter__()
 
