@@ -345,7 +345,7 @@ In a second terminal:
 
 ```bash
 export AMC_BEARER_TOKEN="$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-)"
-curl -sf -H "Authorization: Bearer $AMC_BEARER_TOKEN" http://127.0.0.1:8080/healthz | python3 -m json.tool
+curl -sS -H "Authorization: Bearer $AMC_BEARER_TOKEN" http://127.0.0.1:8080/healthz | python3 -m json.tool
 ```
 
 Expected response (HTTP 200):

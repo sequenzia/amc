@@ -19,8 +19,10 @@ INSTALL_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 cd "${INSTALL_DIR}"
 
 # Ensure uv is on PATH for the launchd-spawned shell, which has a minimal
-# environment and does not source ~/.zshrc / ~/.bash_profile.
-export PATH="/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
+# environment and does not source ~/.zshrc / ~/.bash_profile. ~/.local/bin
+# covers uv's standalone installer (`curl -LsSf https://astral.sh/uv/install.sh`),
+# which is where uv lands when not installed via Homebrew.
+export PATH="${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:${PATH:-}"
 
 # `uv run` resolves and activates the project venv, syncing if needed.
 # `--host` and `--port` mirror the §11.2 defaults; the operator can override
