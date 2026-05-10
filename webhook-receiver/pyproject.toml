@@ -1,0 +1,44 @@
+[project]
+name = "amc-receiver"
+version = "0.1.0"
+description = "Webhook receiver that turns AMC inbound messages into one-shot `claude -p` invocations."
+authors = [
+    { name = "Stephen Sequenzia", email = "sequenzia@gmail.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.136.1",
+    "uvicorn[standard]>=0.46.0",
+    "structlog>=25.5.0",
+]
+
+[project.scripts]
+amc-webhook-receiver = "amc_receiver.__main__:main"
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.3",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.7",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.21,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-root = "src"
+
+[tool.ruff]
+extend = "../pyproject.toml"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+]

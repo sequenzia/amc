@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "mcp__amc__list_unread_messages",
+      "mcp__amc__send_message",
+      "mcp__amc__mark_read",
+      "mcp__amc__get_message_context"
+    ],
+    "deny": [
+      "Bash",
+      "Edit",
+      "Write",
+      "WebFetch",
+      "WebSearch"
+    ]
+  }
+}

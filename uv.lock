@@ -10,6 +10,7 @@ resolution-markers = [
 members = [
     "amc",
     "amc-mcp",
+    "amc-receiver",
 ]
 
 [[package]]
@@ -225,6 +226,39 @@ dev = [
     { name = "pytest", specifier = ">=8.3" },
     { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "respx", specifier = ">=0.23.1" },
+    { name = "ruff", specifier = ">=0.7" },
+]
+
+[[package]]
+name = "amc-receiver"
+version = "0.1.0"
+source = { editable = "webhook-receiver" }
+dependencies = [
+    { name = "fastapi" },
+    { name = "structlog" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "httpx" },
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "fastapi", specifier = ">=0.136.1" },
+    { name = "structlog", specifier = ">=25.5.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.46.0" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "pytest", specifier = ">=8.3" },
+    { name = "pytest-asyncio", specifier = ">=0.24" },
     { name = "ruff", specifier = ">=0.7" },
 ]
 

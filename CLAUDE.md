@@ -23,6 +23,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Lint: `uv run --project mcp ruff check . && uv run --project mcp ruff format --check .`
 - Import audit: `uv run --project mcp python scripts/import_audit.py` (no platform-specific imports)
 
+**Webhook receiver (`webhook-receiver/`):**
+- Run: `uv run --project webhook-receiver uvicorn amc_receiver.app:app --host 127.0.0.1 --port 8090`
+- Test: `uv run --project webhook-receiver pytest`
+- Lint: `uv run --project webhook-receiver ruff check . && uv run --project webhook-receiver ruff format --check .`
+- Bridges adapter outbound webhooks to one-shot `claude -p` invocations; see `webhook-receiver/README.md`.
+
 ### Critical domain knowledge baked into the codebase
 
 - **iMessage `attributedBody`** is an Apple typedstream archive (NOT NSKeyedArchiver/bplist). Magic: `\x04\x0Bstreamtyped`. Decoder lives in `amc/connectors/imessage/reader.py::decode_attributed_body`.
