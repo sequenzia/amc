@@ -74,59 +74,31 @@ Then restart. Worker logs `webhook_worker_started` on boot. Inspect `webhook_del
 
 ---
 
-## Test failures that should be fixed
+## Test failures (resolved 2026-05-09)
 
-These were already failing before the lifespan work and are unrelated to it. Tracking them here so they don't get lost.
+The handoff originally listed five issues; all are now fixed or were already green. Full suite: `uv run pytest` → **711 passed**.
 
-### 1. `tests/core/test_webhook.py` — 14 failing tests
+### 1. `tests/core/test_webhook.py` — 14 tests (FIXED)
 
-**Symptom:** `respx.mock()` reports "some routes were not called" because `WebhookWorker.tick()` never fires the HTTP request that the test set up a respx route for.
+**Actual cause** (not the respx/httpx version mismatch the original handoff guessed): wall-clock skew between `_FakeClock` and `enqueue_webhook`. The fake clock defaulted to `datetime(2026, 5, 3)` — by 2026-05-09 that fixed start was in the past. Tests called `enqueue_webhook(...)` without threading the clock, so rows landed with `next_retry_at = real-now`, while the worker's tick filtered with `now = fake-clock`. The SELECT returned zero rows; the worker never POSTed; respx's `assert_all_called` tripped at the route-not-called assertion.
 
-```
-AssertionError: RESPX: some routes were not called!
-assert [<Route <Scheme eq 'https'> AND <Host eq 'receiver.example'> ...>] == []
-```
+**Fix:** bumped `_FakeClock` default in `tests/core/test_webhook.py:61` (and the mirrored copy in `tests/e2e/test_webhook_retry.py:104`) to `datetime(2099, 1, 1, 12, 0, 0, tzinfo=UTC)`. The fake clock now stays ahead of wall time, so `enqueue_webhook`'s real-time `next_retry_at` is always `<=` the worker's fake `now`. Tests stay hermetic against future drift without having to thread `time_provider=` through every `enqueue_webhook` call site.
 
-**Likely cause:** respx version mismatch with the httpx version `WebhookWorker` uses internally — respx's transport interception isn't catching the calls. This is the same family of issue called out in `CLAUDE.md` for the Discord connector (`respx` can't intercept aiohttp), but here it's httpx so it should be interceptable. Worth comparing the resolved `respx` and `httpx` versions in `uv.lock` against what worked when these tests last passed.
+### 2. `tests/e2e/test_webhook_retry.py` — 2 tests (ALREADY GREEN)
 
-**Affected tests** (all in `tests/core/test_webhook.py`):
-- `test_tick_5xx_schedules_retry_with_first_backoff`
-- `test_full_backoff_schedule_dead_letters_after_5_attempts`
-- `test_tick_skips_rows_whose_next_retry_at_is_in_the_future`
-- `test_tick_network_error_treated_as_5xx_and_retried`
-- `test_tick_timeout_treated_as_5xx_and_retried`
-- `test_in_flight_retry_uses_url_captured_at_queue_time`
-- `test_worker_picks_up_pending_rows_after_restart`
-- `test_tick_processes_rows_in_next_retry_at_ascending_order`
-- `test_tick_4xx_dead_letters_immediately[422]`
-- (and ~5 more in the same module)
+Already passing on 2026-05-09 — both tests thread `fake_clock` through `MessageSink` (which forwards it to `enqueue_webhook`) and the worker, so writer and reader use the same clock. The cosmetic `_FakeClock` default bump above keeps them green into the future.
 
-**Fix path:** check `respx==0.23.1` vs current `httpx`. If versions are mismatched, pin the working pair in `pyproject.toml`. If the API surface changed, update the test fixture's `respx.mock()` calls to the new style.
+### 3. `tests/fixtures/test_chat_db_fixture.py::test_attachment_row_links_to_real_file` (ALREADY GREEN)
 
-### 2. `tests/e2e/test_webhook_retry.py` — 2 failing tests
+Verified passing on 2026-05-09. Likely a transient state from the prior session.
 
-Likely the same `respx`/`httpx` issue cascading; e2e webhook flow can't observe the requests. Fixing #1 should fix these.
+### 4. `tests/core/test_allowlist.py::test_load_allowlist_falls_back_to_default` (FIXED)
 
-- `test_full_backoff_dead_letters_then_message_still_unread`
-- `test_4xx_response_dead_letters_immediately`
+The test relied on `~/.config/messaging-agent/allowlist.toml` being absent on the host — true on CI, false on any dev machine where AMC is configured. Fix: `monkeypatch.setattr("amc.core.allowlist.DEFAULT_ALLOWLIST_PATH", tmp_path / "no-such-allowlist.toml")` so the fallback path is guaranteed missing regardless of host state.
 
-### 3. `tests/fixtures/test_chat_db_fixture.py::test_attachment_row_links_to_real_file`
+### 5. `pytest.mark.slow` unknown-marker warning (FIXED)
 
-A single fixture-level test about chat.db attachments. Investigate independently — could be a file-path expectation that drifted, or a mach-time conversion edge case.
-
-### 4. `tests/core/test_allowlist.py::test_load_allowlist_falls_back_to_default`
-
-**Symptom:** test asserts `load_allowlist()` raises `AllowlistError` when the env var is unset, *because* the default path `~/.config/messaging-agent/allowlist.toml` is expected to be missing on the test host. On any developer machine that has AMC configured, the file exists and `load_allowlist()` succeeds, so the `pytest.raises` block sees no exception → fails.
-
-**Fix path:** change the test to monkeypatch `DEFAULT_ALLOWLIST_PATH` to a guaranteed-missing tmp_path entry, or use `pytest.MonkeyPatch.setattr` on the module constant. The current test only works on a clean host.
-
-### 5. (Possibly cosmetic) `tests/api/test_messages_unread.py` — `PytestUnknownMarkWarning`
-
-```
-PytestUnknownMarkWarning: Unknown pytest.mark.slow
-```
-
-Either register `slow` in `pyproject.toml` `[tool.pytest.ini_options]`'s `markers = [...]`, or remove the marker.
+Registered `slow` in `pyproject.toml [tool.pytest.ini_options].markers`. Single existing usage is `tests/api/test_messages_unread.py:758` (`@pytest.mark.slow` on `TestPerformance`).
 
 ---
 

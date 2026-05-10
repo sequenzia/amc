@@ -66,3 +66,6 @@ addopts = [
     "--strict-markers",
     "--strict-config",
 ]
+markers = [
+    "slow: tests that take noticeably longer than a unit test (perf, throughput).",
+]

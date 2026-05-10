@@ -45,7 +45,6 @@ from alembic.config import Config
 from sqlalchemy import select
 
 from amc.core.allowlist import (
-    DEFAULT_ALLOWLIST_PATH,
     ENV_ALLOWLIST_PATH,
     AllowlistEntry,
     AllowlistError,
@@ -376,14 +375,18 @@ def test_load_allowlist_uses_env_var(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 def test_load_allowlist_falls_back_to_default(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """When neither argument nor env is set, the default path is used."""
     monkeypatch.delenv(ENV_ALLOWLIST_PATH, raising=False)
-    # Default path likely doesn't exist on the test host — assert it tries
-    # to load that path by inspecting the error.
+    # Point the module-level default at a guaranteed-missing path so the
+    # test is hermetic on dev machines that already have AMC configured
+    # (where ~/.config/messaging-agent/allowlist.toml may exist).
+    missing = tmp_path / "no-such-allowlist.toml"
+    monkeypatch.setattr("amc.core.allowlist.DEFAULT_ALLOWLIST_PATH", missing)
     with pytest.raises(AllowlistError) as excinfo:
         load_allowlist()
-    assert str(DEFAULT_ALLOWLIST_PATH) in str(excinfo.value)
+    assert str(missing) in str(excinfo.value)
 
 
 def test_get_allowlist_raises_before_load() -> None:

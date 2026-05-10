@@ -58,7 +58,12 @@ class _FakeClock:
     __slots__ = ("now",)
 
     def __init__(self, start: datetime | None = None) -> None:
-        self.now = start or datetime(2026, 5, 3, 12, 0, 0, tzinfo=UTC)
+        # Far-future default so tests stay hermetic against wall-clock drift:
+        # `enqueue_webhook` defaults to real `datetime.now(UTC)` when callers
+        # don't thread a `time_provider`, and the worker's tick filters
+        # `next_retry_at <= fake_now`. As long as the fake clock is later
+        # than wall time, that comparison holds.
+        self.now = start or datetime(2099, 1, 1, 12, 0, 0, tzinfo=UTC)
 
     def __call__(self) -> datetime:
         return self.now
