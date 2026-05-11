@@ -1,7 +1,8 @@
 """Static validation of the committed launchd plist (spec §9.4).
 
 The plist at ``ops/launchd/com.user.amc-adapter.plist`` is a *template* containing
-two placeholders rendered at install time by ``ops/launchd/install.sh``:
+two placeholders rendered at install time by ``amc install`` (see
+``amc/cli/plist.py``):
 
 - ``__INSTALL_DIR__`` — absolute path to the repo checkout
 - ``__HOME__`` — operator's ``$HOME`` (used to anchor log paths under

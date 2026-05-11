@@ -67,7 +67,7 @@ uv run python -c "import amc; print(amc.__name__)"        # → amc
 uv run python -c "import amc_mcp; print(amc_mcp.__name__)"  # → amc_mcp
 ```
 
-> **Install location matters.** The `ops/launchd/install.sh` script burns the absolute path of the repo into `~/Library/LaunchAgents/com.user.amc-adapter.plist`. If you move the repo later you must re-run `install.sh`.
+> **Install location matters.** `amc install` burns the absolute path of the repo into `~/Library/LaunchAgents/com.user.amc-adapter.plist` (and the other service plists). If you move the repo later, re-run `amc install` to re-render.
 
 ---
 
@@ -108,7 +108,7 @@ The file shipped as `.env.example` lists every variable the adapter understands 
 | `AMC_RATE_LIMIT_PER_CHANNEL_RPS` (`1`) and `AMC_RATE_LIMIT_PER_CHANNEL_BURST` (`5`) | No | Per-channel token bucket. Keep low; raising these without coordination will trip platform-side limits. |
 | `AMC_ATTACHMENT_RETENTION_DAYS` (`90`) | No | The attachment sweeper deletes re-hosted blobs older than this many days. |
 
-> **Where the `.env` file is loaded.** The adapter reads it at startup via `amc.core.auth.load_bearer_token()`. It is **not** auto-watched — change the file and restart the adapter (or `launchctl kickstart -k`) for new values to take effect.
+> **Where the `.env` file is loaded.** The adapter reads it at startup via `amc.core.auth.load_bearer_token()`. It is **not** auto-watched — change the file and restart the adapter (`amc service restart adapter`) for new values to take effect.
 
 ---
 
@@ -161,7 +161,7 @@ Restrict permissions (the file may name people you'd rather not advertise):
 chmod 0600 ~/.config/messaging-agent/allowlist.toml
 ```
 
-> **The adapter refuses to start with a missing or malformed allowlist.** Spec §5.1 error handling. If you change the file while the adapter is running, send `SIGHUP` to reload in place (`kill -HUP $(pgrep -f "uvicorn amc.app:app")`) — the adapter does not need a restart for allowlist edits.
+> **The adapter refuses to start with a missing or malformed allowlist.** Spec §5.1 error handling. If you change the file while the adapter is running, send `SIGHUP` to reload in place (`kill -HUP "$(amc status adapter --json | jq -r '.pid')"`) — the adapter does not need a restart for allowlist edits.
 
 ---
 
@@ -212,7 +212,7 @@ The adapter runs as a normal user-space process on macOS, but the iMessage path 
 **Verify:**
 
 ```bash
-tail -f ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log
+amc logs adapter
 ```
 
 Look for a structured log line of the form:
@@ -266,7 +266,7 @@ Expected: HTTP 200 with a normalized envelope echo, and the message visibly appe
 - **Foreground wrapper** (simplest, recommended for development):
 
   ```bash
-  caffeinate -dimsu -- uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080
+  caffeinate -dimsu -- amc serve adapter
   ```
 
   Flags: `-d` prevent display sleep, `-i` prevent idle sleep, `-m` prevent disk sleep, `-s` prevent system sleep on AC power, `-u` declare user activity. The `--` separates `caffeinate` flags from the wrapped command.
@@ -318,8 +318,11 @@ sqlite3 ~/Library/Application\ Support/messaging-agent/amc.db '.tables'
 
 ### 7.2 Start the adapter
 
+Run the adapter in the foreground via the CLI (`amc serve adapter` execs
+`uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080` in-place):
+
 ```bash
-uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080
+amc serve adapter
 ```
 
 You should see structured log lines starting with `event=startup` and (within ~2 seconds) `event=connector_state component=discord_connector state=ok`. The iMessage connector logs `state=ok` only after FDA has been granted to the actual interpreter path (see §6.1).
@@ -358,36 +361,53 @@ Stop the foreground adapter with `Ctrl-C` once `/healthz` returns 200.
 
 ## 8. launchd Supervision
 
-For the adapter to survive logout, system sleep/wake, and crashes, install it as a per-user LaunchAgent. The artifacts live in `ops/launchd/`; the installer is idempotent.
+For the adapter to survive logout, system sleep/wake, and crashes, install it as a per-user LaunchAgent. The plist templates live in `ops/launchd/`; the `amc` CLI is the install / lifecycle front end.
 
 ### 8.1 Install
 
 ```bash
-./ops/launchd/install.sh
+amc install
 ```
 
-The script:
+`amc install` (with no service name) installs every known service —
+`adapter`, `receiver`, and `backup`. To install only specific services:
 
-1. Creates `~/Library/Logs/messaging-agent/` if missing (launchd will not create parent directories for `StandardOutPath`).
-2. Renders `ops/launchd/com.user.amc-adapter.plist` with your install dir and `$HOME` substituted in.
+```bash
+amc install adapter           # adapter only
+amc install adapter receiver  # adapter + webhook receiver
+```
+
+Internally, `amc install` for each named service:
+
+1. Ensures `~/Library/Logs/messaging-agent/` exists (launchd will not create parent directories for `StandardOutPath`).
+2. Renders the template plist from `ops/launchd/` with your install dir and `$HOME` substituted in.
 3. Validates the rendered plist with `plutil -lint`.
-4. Atomically writes it to `~/Library/LaunchAgents/com.user.amc-adapter.plist`.
-5. Bootstraps the service into the GUI domain (`launchctl bootstrap gui/$(id -u)`).
+4. Atomically writes it to `~/Library/LaunchAgents/<label>.plist`.
+5. Bootstraps the service into the GUI user domain.
 6. Marks it enabled.
 
-Re-running is safe — the script unloads any existing copy first.
+Re-running is safe — `amc install` unloads any existing copy first.
+
+Run the bundled health-check next to confirm the install is sound:
+
+```bash
+amc doctor
+```
+
+`amc doctor` walks FDA, Automation, `.env` presence + mode, allowlist
+presence, plist install state, service state, and `/healthz`.
 
 ### 8.2 Verify
 
 ```bash
-launchctl print "gui/$(id -u)/com.user.amc-adapter" | head -20
+amc status adapter
 ```
 
-Look for `state = running` and a non-zero `pid =`. Tail the launchd-level logs (process spawn output, not adapter structured logs):
+Look for `state = running` and a non-zero `pid`. Follow the launchd-level
+logs (process spawn output, not adapter structured logs):
 
 ```bash
-tail -F ~/Library/Logs/messaging-agent/launchd-stdout.log \
-        ~/Library/Logs/messaging-agent/launchd-stderr.log
+amc logs adapter --launchd
 ```
 
 Re-run `curl /healthz` from §7.3 to confirm the launchd-spawned process is serving traffic.
@@ -406,14 +426,20 @@ This satisfies the spec §6.4 RTO target of ≤ 5 minutes after a process crash.
 
 ```bash
 # Restart in place (after a config change in ~/.config/messaging-agent/.env):
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 
-# Uninstall:
-launchctl bootout "gui/$(id -u)/com.user.amc-adapter"
-rm ~/Library/LaunchAgents/com.user.amc-adapter.plist
+# Stop / start without removing the install:
+amc service stop adapter
+amc service start adapter
+
+# Uninstall (bootout + remove plist):
+amc uninstall adapter
+
+# Uninstall but keep the plist on disk for inspection:
+amc uninstall adapter --keep-plist
 ```
 
-> **Configuration belongs in `.env`, not the plist.** The `EnvironmentVariables` dict in the plist is intentionally empty. The adapter loads `~/.config/messaging-agent/.env` at startup, so a config change does not require reinstalling the LaunchAgent — `kickstart -k` is enough.
+> **Configuration belongs in `.env`, not the plist.** The `EnvironmentVariables` dict in the plist is intentionally empty. The adapter loads `~/.config/messaging-agent/.env` at startup, so a config change does not require reinstalling the LaunchAgent — `amc service restart adapter` is enough.
 
 ---
 
@@ -599,10 +625,10 @@ cd ~/code/amc        # or wherever you installed
 git pull
 uv sync --all-packages
 uv run alembic upgrade head
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 ```
 
-Reinstall the LaunchAgent (`./ops/launchd/install.sh`) only if `ops/launchd/com.user.amc-adapter.plist` itself changed in the pull.
+Re-run `amc install` only if a plist template under `ops/launchd/` itself changed in the pull (`amc install` is idempotent).
 
 **Rollback:**
 
@@ -610,7 +636,7 @@ Reinstall the LaunchAgent (`./ops/launchd/install.sh`) only if `ops/launchd/com.
 uv run alembic downgrade -1   # if a migration is at fault
 git checkout <previous-sha>
 uv sync --all-packages
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 ```
 
 ---
@@ -627,7 +653,7 @@ The full runbook lives in `RUNBOOK.md` (post-handoff). Quick-reference symptoms 
 | Send returns 200 but message never arrives on iMessage | Automation grant on the adapter's parent process (§6.2). |
 | Inbound iMessage stops after a long gap | Mac slept (§6.3); `pmset -g log \| grep -i sleep`. |
 | Webhooks all dead-lettered | Webhook URL reachable from the host; HMAC secret matches receiver; check `webhook_deliveries WHERE status='dead'`. |
-| Adapter won't start under launchd | `~/Library/Logs/messaging-agent/launchd-stderr.log`; usually a missing `.env`, missing `AMC_BEARER_TOKEN`, or absent allowlist file. |
+| Adapter won't start under launchd | `amc doctor`, then `amc logs adapter --launchd --no-follow`; usually a missing `.env`, missing `AMC_BEARER_TOKEN`, or absent allowlist file. |
 | MCP wrapper exits immediately | Missing `AMC_BEARER_TOKEN` or `AMC_AGENT_ID` in the host's `env` block; the wrapper logs `WrapperConfigError` to stderr. |
 
 For anything not covered here, the structured JSON logs at `~/Library/Logs/messaging-agent/adapter-YYYY-MM-DD.log` are the source of truth — every component logs `event=` and `component=` fields you can grep on.

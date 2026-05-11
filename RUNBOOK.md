@@ -33,23 +33,25 @@ mitigations called out in §13 (Risks R-1, R-3, R-5, R-8, R-10).
 
 ## 1. Adapter won't start
 
-**Symptom**: `launchctl print "gui/$(id -u)/com.user.amc-adapter"` shows
-`last exit code = N` with `N != 0`, or the adapter exits immediately when
-launched manually with `uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080`.
-The HTTP port is not bound, and `curl http://127.0.0.1:8080/healthz` fails
-with `Connection refused`.
+**Symptom**: `amc status adapter` shows `state=stopped` with a non-zero
+`last_exit`, or the adapter exits immediately when launched manually with
+`amc serve adapter`. The HTTP port is not bound, and
+`curl http://127.0.0.1:8080/healthz` fails with `Connection refused`.
 
 ### Diagnose
 
 ```bash
-# Tail the launchd-level spawn output (stderr from the process itself).
-tail -n 200 ~/Library/Logs/messaging-agent/launchd-stderr.log
+# Run the bundled diagnostics first — covers FDA, .env, allowlist, service state.
+amc doctor
 
-# Tail the structured adapter log if the process got far enough to configure logging.
-tail -n 200 ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log
+# Show the structured adapter log (last 200 lines, no follow).
+amc logs adapter --no-follow -n 200
+
+# Show the launchd-level spawn output (process-level crashes go here).
+amc logs adapter --launchd --no-follow -n 200
 
 # Filter for startup errors specifically.
-grep -E 'level=(error|critical)' ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 50
+amc logs adapter --no-follow -n 500 | grep -E 'level=(error|critical)' | tail -n 50
 ```
 
 Walk these checks in order — they are the same checks the adapter performs at
@@ -91,14 +93,15 @@ stat -f '%A %N' ~/.config/messaging-agent/.env
 Then restart:
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 ```
 
 ### Confirm
 
 ```bash
+amc status adapter
 curl -sS http://127.0.0.1:8080/healthz | jq .
-# Expected: {"status": "ok", ...}
+# Expected: state=running and {"status": "ok", ...}
 ```
 
 ---
@@ -114,12 +117,12 @@ without sustained delivery. New Discord messages do not appear in
 
 ```bash
 # Filter for Discord connector events (last 200 lines).
-grep -E 'discord_(connector|gateway)' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 200
+amc logs adapter --no-follow -n 500 | \
+  grep -E 'discord_(connector|gateway)' | tail -n 200
 
 # Specifically look for close codes and identify failures.
-grep -E 'close_code|invalid_session|identify_failed|disallowed_intents' \
-  ~/Library/Logs/messaging-agent/adapter-*.log | tail -n 50
+amc logs adapter --no-follow -n 2000 | \
+  grep -E 'close_code|invalid_session|identify_failed|disallowed_intents' | tail -n 50
 
 # Healthz state.
 curl -sS http://127.0.0.1:8080/healthz | jq '.connectors.discord'
@@ -150,8 +153,7 @@ Common close codes and what they mean (see [Discord Gateway docs](https://discor
 1. **Bad token** (`4004`): generate a new token in the
    [Discord Developer Portal](https://discord.com/developers/applications) →
    Bot → Reset Token. Update `AMC_DISCORD_BOT_TOKEN` in
-   `~/.config/messaging-agent/.env`. Restart:
-   `launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"`.
+   `~/.config/messaging-agent/.env`. Restart: `amc service restart adapter`.
 2. **Disallowed intent** (`4013`/`4014`): Developer Portal → your app → Bot →
    **Privileged Gateway Intents** → enable **MESSAGE CONTENT INTENT**.
    No code change required; the connector will pick it up on the next
@@ -189,8 +191,8 @@ events for the past minute or more.
 
 ```bash
 # Last poll activity (the connector logs each poll cycle and the last ROWID).
-grep -E 'imessage_(connector|poll|cursor)' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 50
+amc logs adapter --no-follow -n 2000 | \
+  grep -E 'imessage_(connector|poll|cursor)' | tail -n 50
 
 # What ROWID does the connector think it is at?
 sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
@@ -228,7 +230,7 @@ pmset -g assertions | grep -E 'PreventUserIdleSystemSleep|PreventSystemSleep'
 | FDA denied to adapter | Re-grant FDA to the adapter's actual binary path (which may have changed across `uv` cache rebuilds or Python upgrades). See `docs/SETUP-imessage-section.md` §1, "Permission Recovery Checklist". Fully restart the adapter. |
 | Mac was asleep | Wake the Mac. The connector resumes from the persisted ROWID, so no inbound messages are lost — they will be processed in order. To prevent recurrence: launch the adapter under `caffeinate -dimsu --` or set Energy / Battery → "Prevent automatic sleeping when display is off". |
 | Messages.app not signed in | Open Messages.app and sign in with the operator's Apple ID. `chat.db` only receives writes when Messages.app is the running iMessage client. |
-| Connector stuck (last poll log > 1 min ago, FDA OK, Mac awake) | Restart the adapter: `launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"`. The persisted ROWID cursor (spec §5.3 `connector_state`) ensures no missed rows. |
+| Connector stuck (last poll log > 1 min ago, FDA OK, Mac awake) | Restart the adapter: `amc service restart adapter`. The persisted ROWID cursor (spec §5.3 `connector_state`) ensures no missed rows. |
 | `connector_state.cursor` is corrupt or way ahead of real `chat.db` | Manually reset to the highest known-good ROWID: `sqlite3 "$AMC_DB_PATH" "UPDATE connector_state SET cursor=<rowid> WHERE source='imessage';"`. Restart the adapter. **Warning**: setting it lower than current will re-emit messages on the webhook; setting it higher will skip messages. |
 
 ### Confirm
@@ -267,8 +269,8 @@ returns success but Messages.app silently drops the request.
 
 ```bash
 # Recent send attempts.
-grep -E 'applescript|osascript' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 30
+amc logs adapter --no-follow -n 2000 | \
+  grep -E 'applescript|osascript' | tail -n 30
 
 # Re-trigger the prompt manually using the same Apple-event a real send uses.
 # Run this from the same shell / parent process tree as the adapter
@@ -291,7 +293,7 @@ osascript -e 'tell application "Messages" to get name'
    Automation to Terminal does not grant it to launchd-spawned Python.
    Re-trigger the prompt from the actual adapter parent process.
 4. Restart the adapter so the TCC state is re-read fresh:
-   `launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"`.
+   `amc service restart adapter`.
 
 If the host has been wedged by repeated denials, a last-resort reset:
 
@@ -338,8 +340,8 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
    FROM webhook_deliveries WHERE status='dead' ORDER BY updated_at DESC LIMIT 10;"
 
 # Recent webhook delivery log lines.
-grep -E 'webhook_(deliver|attempt|dead)' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 50
+amc logs adapter --no-follow -n 2000 | \
+  grep -E 'webhook_(deliver|attempt|dead)' | tail -n 50
 ```
 
 Walk these external checks:
@@ -378,7 +380,7 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
 After fixing config, reload the adapter to pick up new env values:
 
 ```bash
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 ```
 
 The dead-lettered rows are *not* retried automatically — the underlying
@@ -434,8 +436,8 @@ SQL
 grep '^AMC_ATTACHMENT_RETENTION_DAYS=' ~/.config/messaging-agent/.env
 
 # Did the sweeper actually run lately? (logs an entry per sweep cycle)
-grep -E 'attachment_(sweep|retention)' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 20
+amc logs adapter --no-follow -n 2000 | \
+  grep -E 'attachment_(sweep|retention)' | tail -n 20
 
 # How many rows are older than the current threshold and still on disk?
 THRESHOLD=$(grep '^AMC_ATTACHMENT_RETENTION_DAYS=' \
@@ -459,7 +461,7 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
 2. **Force the sweep** (the sweeper runs on a daily cadence; restart re-arms
    it for an immediate cycle on startup):
    ```bash
-   launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+   amc service restart adapter
    ```
 3. If the sweeper itself isn't running (no `attachment_sweep` log entries
    since the last restart), check `connector_state` and the sweep task in
@@ -542,7 +544,7 @@ less /tmp/alembic-dryrun.sql
 uv run alembic upgrade head
 
 # 6. Restart the adapter.
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 ```
 
 If the downgrade itself fails (broken `downgrade()` in the new revision):
@@ -583,8 +585,8 @@ the source of truth for the operator to adapt the decoder against.
 
 ```bash
 # Confirm it's the iMessage connector specifically.
-grep -E 'imessage_(decode|chatdb|schema)' \
-  ~/Library/Logs/messaging-agent/adapter-*.log | tail -n 50
+amc logs adapter --no-follow -n 5000 | \
+  grep -E 'imessage_(decode|chatdb|schema)' | tail -n 50
 
 # What macOS version is this Mac on?
 sw_vers -productVersion
@@ -618,8 +620,8 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
      decades), but recompute via `date / 1_000_000_000 + APPLE_EPOCH_OFFSET`.
 4. Add a fixture row in `tests/fixtures/build_chat_db.py` that exercises the
    new shape; assert the decoder produces the expected envelope.
-5. Roll out: `git pull && uv sync && alembic upgrade head &&
-   launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"`.
+5. Roll out: `git pull && uv sync --all-packages && uv run alembic upgrade
+   head && amc service restart adapter`.
 
 The `messages.raw_json` rows captured during the broken window let you
 re-decode and re-emit historical messages once the fix is in (a one-shot
@@ -633,8 +635,8 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
   "SELECT cursor, updated_at FROM connector_state WHERE source='imessage';"
 # updated_at advances; cursor crosses the post-upgrade ROWID range without errors.
 
-grep -c 'imessage_decode_error' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log
+amc logs adapter --no-follow -n 5000 | \
+  grep -c 'imessage_decode_error'
 # Trends to zero.
 ```
 
@@ -659,8 +661,8 @@ adapter logs a `WARN`.
 # 1. Look for the loader warning. The allowlist loader logs a WARN when a
 #    person_id is referenced from only a single entry — exactly the
 #    split-brain signal.
-grep -E 'person_id.*(single|alone|one_entry|split)' \
-  ~/Library/Logs/messaging-agent/adapter-*.log | tail -n 50
+amc logs adapter --no-follow -n 5000 | \
+  grep -E 'person_id.*(single|alone|one_entry|split)' | tail -n 50
 
 # 2. Inspect the materialized identity_links table — how many rows per person_id?
 sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
@@ -709,10 +711,9 @@ cat ~/.config/messaging-agent/allowlist.toml
    ```
 2. Reload the allowlist (no restart needed; spec §5.7 supports SIGHUP):
    ```bash
-   pkill -HUP -f 'uvicorn amc.app:app'
-   # Or, if you can't target by command line, get the launchd-supervised PID:
-   launchctl print "gui/$(id -u)/com.user.amc-adapter" | grep '^\s*pid ='
-   # then: kill -HUP <pid>
+   # Get the supervised adapter PID via amc status, then SIGHUP it.
+   PID=$(amc status adapter --json | jq -r '.pid')
+   kill -HUP "$PID"
    ```
 
    `identity_links` is rebuilt on SIGHUP from the new allowlist (spec §5.3,
@@ -730,8 +731,8 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
    FROM identity_links GROUP BY person_id ORDER BY link_count;"
 
 # The WARN should not re-appear on the next SIGHUP-reload log line.
-grep -E 'allowlist_(load|reload)' \
-  ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log | tail -n 5
+amc logs adapter --no-follow -n 500 | \
+  grep -E 'allowlist_(load|reload)' | tail -n 5
 ```
 
 ---
@@ -741,14 +742,20 @@ grep -E 'allowlist_(load|reload)' \
 The same handful of commands cover ~80% of diagnosis. Bookmark these.
 
 ```bash
-# Live tail of structured adapter logs, errors only.
-tail -f ~/Library/Logs/messaging-agent/adapter-*.log | grep level=error
+# Live follow of structured adapter logs, errors only.
+amc logs adapter | grep level=error
 
-# Today's full adapter log.
-tail -n 500 ~/Library/Logs/messaging-agent/adapter-$(date +%Y-%m-%d).log
+# Today's adapter log (last 500 lines, no follow).
+amc logs adapter --no-follow -n 500
 
 # Launchd spawn output (process-level crashes show here, not in the structured log).
-tail -n 200 ~/Library/Logs/messaging-agent/launchd-stderr.log
+amc logs adapter --launchd --no-follow -n 200
+
+# Bundled diagnostics — FDA, .env, allowlist, service state, healthz.
+amc doctor
+
+# Service state.
+amc status
 
 # Health.
 curl -sS http://127.0.0.1:8080/healthz | jq .
@@ -770,11 +777,24 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amc.db" \
 du -sh ~/Library/Application\ Support/messaging-agent/attachments
 
 # Restart the adapter (in-place; preserves launchd supervision).
-launchctl kickstart -k "gui/$(id -u)/com.user.amc-adapter"
+amc service restart adapter
 
-# Reload allowlist without a restart.
-pkill -HUP -f 'uvicorn amc.app:app'
+# Reload allowlist without a restart (SIGHUP the supervised PID).
+kill -HUP "$(amc status adapter --json | jq -r '.pid')"
 ```
+
+## Escape hatch: raw `launchctl`
+
+Routine ops should never need raw `launchctl`. If `amc` itself is broken
+or the host has wedged into an unrecoverable launchd state, drop down to
+the underlying domain commands as a last resort:
+
+```bash
+launchctl print "gui/$(id -u)/com.user.amc-adapter"
+launchctl bootout "gui/$(id -u)/com.user.amc-adapter"
+```
+
+Use sparingly; file an issue describing what `amc` couldn't recover from.
 
 ## See also
 

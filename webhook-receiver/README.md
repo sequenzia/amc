@@ -85,7 +85,7 @@ tail -f ~/Library/Logs/messaging-agent/receiver-*.log
 ## Production install (launchd)
 
 ```bash
-./ops/launchd/install.sh    # installs both adapter and receiver
+amc install    # installs adapter, receiver, and backup services
 ```
 
 See `ops/launchd/README.md` for details.

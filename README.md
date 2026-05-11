@@ -133,6 +133,51 @@ The wrapper has zero platform-specific imports (no Discord SDK, no
 AppleScript / chat.db references); the import-audit script asserts this
 statically.
 
+## amc CLI
+
+`amc` is the operator-facing CLI shipped with the adapter. It wraps the
+foreground entry points, the `launchd` plist render/install pipeline, and a
+preflight diagnostics command — everything an operator needs to install,
+inspect, and troubleshoot the AMC services on a single Mac. After
+`uv sync --all-packages`, the `amc` entry point is on the path; run
+`amc --help` for the canonical surface.
+
+### Command reference
+
+| Command | Description | Example |
+| --- | --- | --- |
+| `amc serve {adapter\|receiver}` | Run an AMC service in the foreground (`os.execvp`-handoff to `uv run uvicorn ...`). The `backup` target is launchd-only. | `amc serve adapter` |
+| `amc install [name\|all]` | Render plists and bootstrap AMC launchd services. No args = install all (`adapter`, `receiver`, `backup`). | `amc install adapter receiver` |
+| `amc uninstall [name\|all] [--keep-plist]` | Bootout services and remove their plists. `--keep-plist` leaves the file on disk. | `amc uninstall all --keep-plist` |
+| `amc service {start\|stop\|restart\|enable\|disable} [name\|all]` | Per-service launchd lifecycle. `start` auto-bootstraps if needed; `restart` uses `kickstart -k`. | `amc service restart adapter` |
+| `amc status [name\|all] [--json]` | Show launchd state (PID, last exit, uptime) as a Rich/plain table, or JSON for tooling. | `amc status --json` |
+| `amc logs [name\|all] [--launchd] [--no-follow] [-n N]` | Tail-follow service logs. `--launchd` switches to launchd-level stdout/stderr. Multi-service mode prefixes each line with `[<svc>] `. | `amc logs adapter -n 100` |
+| `amc doctor [--json]` | Run preflight diagnostics (spec §5.8). Exits 2 if any check is `fail`. | `amc doctor` |
+
+Service names are `adapter`, `receiver`, `backup`, or `all`. An empty target
+list is equivalent to `all`.
+
+### Shell completion
+
+The `amc` CLI uses Typer's built-in completion. To enable tab-completion for
+commands like `amc <TAB>` and `amc service <TAB>`:
+
+```bash
+# zsh (default on macOS)
+amc --install-completion zsh
+exec zsh   # or open a new terminal
+
+# bash
+amc --install-completion bash
+
+# fish
+amc --install-completion fish
+```
+
+To inspect the script without installing it, use `amc --show-completion`.
+Typer auto-detects the current shell via `shellingham`; in non-TTY contexts it
+prints `Shell not supported.` and exits non-zero.
+
 ## Status
 
 **Pre-v1, in active build.**

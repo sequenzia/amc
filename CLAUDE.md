@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository State
 
-**v1 implementation complete (2026-05-03; MCP wrapper ported from TypeScript to Python 2026-05-09).** Full Python adapter (FastAPI + SQLAlchemy + Alembic) + iMessage and Discord connectors + Python MCP wrapper (uv workspace member at `mcp/`) + ops scripts + tests + docs. The spec (`specs/agent-messaging-channel-SPEC.md`) is the source of truth for v1; the blueprint (`internal/blueprints/agent-messaging-channel.md`) has been reconciled twice.
+**v1 implementation complete (2026-05-03; MCP wrapper ported from TypeScript to Python 2026-05-09; Typer `amc` CLI replaced `ops/launchd/install.sh` 2026-05-11).** Full Python adapter (FastAPI + SQLAlchemy + Alembic) + iMessage and Discord connectors + Python MCP wrapper (uv workspace member at `mcp/`) + `amc` operator CLI (`amc/cli/`, Typer + Rich) + tests + docs. The spec (`specs/agent-messaging-channel-SPEC.md`) is the source of truth for v1; the CLI spec is `specs/amc-cli-SPEC.md`; the blueprint (`internal/blueprints/agent-messaging-channel.md`) has been reconciled twice.
 
 ### Build / lint / test commands
 
@@ -28,6 +28,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Test: `uv run --project webhook-receiver pytest`
 - Lint: `uv run --project webhook-receiver ruff check . && uv run --project webhook-receiver ruff format --check .`
 - Bridges adapter outbound webhooks to one-shot `claude -p` invocations; see `webhook-receiver/README.md`.
+
+**`amc` operator CLI (`amc/cli/`):**
+- `amc serve {adapter|receiver}` — manual foreground run (uses `os.execvp` for flat process tree).
+- `amc install [name|all]` / `amc uninstall [name|all] [--keep-plist]` — render plists + bootstrap/bootout launchd services.
+- `amc service {start|stop|restart|enable|disable} [name|all]` — lifecycle, auto-bootstraps on `start` when needed.
+- `amc status [name|all] [--json]` / `amc logs [name|all] [--launchd] [--no-follow] [-n N]` / `amc doctor [--json]` — observe.
+- Cold-start budget: <200 ms. CLI modules MUST be import-light; defer heavy deps (FastAPI, SQLAlchemy, Rich tables, our own helper modules) to inside command bodies. `amc.cli.app` does NOT preload `amc.cli.{logs,serve,plist,output,launchctl,status,install,uninstall,service,doctor}` at module level.
+- Test home: `tests/cli/` — `typer.testing.CliRunner` + `_FakeTTY(StringIO)` helper for Rich-path tests. Do NOT pass `mix_stderr` to CliRunner (current click 8.3.3 already separates stderr).
+- Subprocess seam pattern: shell-out modules expose module-private `_run(argv)`; tests patch the attribute (e.g., `amc.cli.launchctl._run`).
 
 ### Critical domain knowledge baked into the codebase
 
