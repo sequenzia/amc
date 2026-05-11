@@ -10,6 +10,7 @@
   "enabledPlugins": {
     "playwright@claude-plugins-official": true,
     "mcp-server-dev@claude-plugins-official": true,
-    "pydantic-ai@claude-plugins-official": true
+    "pyright-lsp@claude-plugins-official": true,
+    "agent-alchemy-sdd-tools@agent-alchemy": true
   }
 }
