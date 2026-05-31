@@ -1,21 +1,21 @@
-# Agent Messaging Channel — API Reference
+# REST API Reference
 
 Cross-reference: this document expands the contract defined in
-[`specs/agent-messaging-channel-SPEC.md` §7.4](../specs/agent-messaging-channel-SPEC.md#74-api-specifications)
-("API Specifications") and §7.4.7 (MCP tool surface). It is regenerated from the
-FastAPI app's OpenAPI schema (`amc.app.app.openapi()`) plus a hand-written MCP
-section that mirrors the Pydantic input models in `mcp/src/amc_mcp/tools/*.py`.
+[`specs/agent-messaging-channel-SPEC.md` §7.4](https://github.com/sequenzia/amc/blob/main/specs/agent-messaging-channel-SPEC.md#74-api-specifications)
+("API Specifications"). It is regenerated from the FastAPI app's OpenAPI schema
+(`amc.app.app.openapi()`). The parallel MCP surface is documented separately in
+[MCP Tools](mcp-tools.md).
 
 The adapter exposes two parallel surfaces:
 
 1. **REST** — `amc.app:app`, an HTTP API bound to `127.0.0.1:8080` by default
    (configurable via `AMC_BIND_HOST` / `AMC_BIND_PORT`). Every route is gated
    by an `Authorization: Bearer <token>` header; per-agent read endpoints
-   additionally require an `X-Agent-ID: <name>` header.
+   additionally require an `X-Agent-ID: <name>` header. Documented on this page.
 2. **MCP** — a thin Python wrapper (`mcp/`, FastMCP) that exposes four
    tools to MCP-speaking agents and translates each call into one HTTP
    request against the REST surface. The wrapper injects bearer / agent-id
-   headers and an `Idempotency-Key` for `send_message`.
+   headers and an `Idempotency-Key` for `send_message`. See [MCP Tools](mcp-tools.md).
 
 ---
 
@@ -509,174 +509,25 @@ models in the route modules.
 
 ---
 
-## 4. MCP Tool Surface
+## 4. MCP tool surface
 
-Cross-reference: spec §7.4.7. The MCP wrapper (`mcp/src/amc_mcp/tools/*.py`)
-exposes exactly four tools that map 1:1 to REST endpoints. Each tool is a
-self-contained module that registers a `@mcp.tool()` handler with a Pydantic
-input schema; none contain platform-specific code (no Discord / AppleScript /
-chat.db imports). Input is validated by Pydantic at the framework boundary;
-unit tests exercise the same handlers directly with a fake HTTP client.
-
-The wrapper injects the bearer token and `X-Agent-ID` headers from
-`AMC_BEARER_TOKEN` / `AMC_AGENT_ID` env vars, and generates a fresh UUIDv4
-`Idempotency-Key` for `send_message`. Errors are returned as the spec
-§7.4.12 envelope verbatim.
-
-### 4.1 `list_unread_messages`
-
-**Maps to**: `GET /messages/unread` (§2.1).
-
-**Purpose**: Return allowlisted messages the agent has not yet
-acknowledged. Optional filters narrow by source, channel, time, and count.
-
-**Input schema** (zod → JSON):
-
-```jsonc
-{
-  "since":       "string?",                        // optional, ISO 8601
-  "source":      "\"imessage\" | \"discord\"?",    // optional
-  "channel_id":  "string?",                        // optional
-  "limit":       "integer? in [1, 100]"            // optional
-}
-```
-
-**Output** (`content[0].text` is the pretty-printed JSON; `data` carries
-the structured form):
-
-```jsonc
-{
-  "messages":   [ /* Envelope, ... */ ],
-  "next_since": "2026-04-25T15:32:11.123Z" // string | null
-}
-```
-
-**Error envelope** (returned with `isError: true`):
-
-```jsonc
-{ "error": { "code": "STABLE_CODE", "message": "...", "status": 401 } }
-```
-
-Codes propagate from the adapter: `UNAUTHORIZED`, `AGENT_ID_REQUIRED`,
-`VALIDATION_FAILED`.
-
----
-
-### 4.2 `send_message`
-
-**Maps to**: `POST /messages/send` (§2.5).
-
-**Purpose**: Send a message to a channel. Optional `reply_to` threads under
-another message in the same channel. Each attachment must supply exactly
-one of `url` (HTTP(S)) or `path` (local file).
-
-**Input schema** (zod → JSON):
-
-```jsonc
-{
-  "channel_id": "string",                          // required
-  "text":       "string",                          // required (empty allowed)
-  "reply_to":   "string?",                         // optional, msg_<ULID>
-  "attachments": [                                 // optional array
-    {
-      "url":  "string?",                           // exactly one of url/path
-      "path": "string?"
-    }
-  ]
-}
-```
-
-The wrapper attaches `Idempotency-Key: <UUIDv4>` to every call; agents do
-not pass keys themselves.
-
-**Output**:
-
-```jsonc
-{
-  "message_id": "msg_01HXYZABCDEFGHJKMNPQRSTVWX",
-  "sent_at":    "2026-04-25T15:32:13.123Z"
-}
-```
-
-**Error envelope** — same shape as §4.1. Adapter codes that surface:
-`UNAUTHORIZED`, `VALIDATION_FAILED`, `CHANNEL_NOT_FOUND`,
-`MESSAGE_NOT_FOUND` (attachment lookup), `ATTACHMENT_TOO_LARGE_FOR_PLATFORM`,
-`IDEMPOTENCY_KEY_REUSE`, `RATE_LIMITED` (with `Retry-After` in the upstream
-HTTP layer), `PLATFORM_AUTH`, `PLATFORM_SEND_FAILED`.
-
----
-
-### 4.3 `mark_read`
-
-**Maps to**: `POST /messages/mark_read` (§2.4).
-
-**Purpose**: Acknowledge one or more messages so they no longer appear in
-`list_unread_messages`. Naturally idempotent at the storage layer (UPSERT
-on `(message_id, agent_id)`); the wrapper does not attach an
-`Idempotency-Key`.
-
-**Input schema** (zod → JSON):
-
-```jsonc
-{
-  "message_ids": [
-    "string matching ^msg_[0-9A-HJKMNP-TV-Z]{26}$"
-  ]
-}
-```
-
-**Output**:
-
-```jsonc
-{ "marked_count": 2 }   // count of unique ids submitted (OQ-1)
-```
-
-**Error envelope** — same shape as §4.1. Adapter codes that surface:
-`UNAUTHORIZED`, `AGENT_ID_REQUIRED`, `VALIDATION_FAILED`. Unknown ids do
-**not** error — they are silently skipped at the storage layer but still
-counted in `marked_count` per OQ-1.
-
----
-
-### 4.4 `get_message_context`
-
-**Maps to**: `GET /messages/context` (§2.3).
-
-**Purpose**: Fetch N messages before and after a target message in a
-channel, in chronological order. Defaults match the spec (`before=5`,
-`after=5`); both are capped at 50 in the zod schema so out-of-range inputs
-fail fast with a Zod error rather than waiting for the adapter to return
-422.
-
-**Input schema** (zod → JSON):
-
-```jsonc
-{
-  "channel_id":        "string",                                    // required
-  "around_message_id": "string matching ^msg_[0-9A-HJKMNP-TV-Z]{26}$", // required
-  "before":            "integer in [0, 50] (default 5)",
-  "after":             "integer in [0, 50] (default 5)"
-}
-```
-
-**Output**:
-
-```jsonc
-{ "messages": [ /* Envelope, ... */ ] }
-```
-
-**Error envelope** — same shape as §4.1. Adapter codes that surface:
-`UNAUTHORIZED`, `AGENT_ID_REQUIRED`, `VALIDATION_FAILED`,
-`MESSAGE_NOT_FOUND` (target unknown / quarantined / channel mismatch).
+The four-tool MCP surface that maps 1:1 onto these REST endpoints is documented
+on its own page: [MCP Tools](mcp-tools.md). The wrapper (`mcp/`, FastMCP)
+injects the bearer / `X-Agent-ID` headers and an `Idempotency-Key` for
+`send_message`, and returns the spec §7.4.12 error envelope verbatim.
 
 ---
 
 ## 5. Compatibility note
 
-The mounted REST surface in `amc.app:app` is the canonical authority. Spec
-§7.4 also enumerates `POST /typing` (§7.4.6) and `GET /healthz` (§7.4.10);
-those routers exist (`amc/api/typing.py`, `amc/api/healthz.py`) but are not
-yet mounted by `build_app()` at the time of writing. They will be added in
-a follow-on wave alongside the lifespan that wires connectors, allowlist,
-and the webhook worker. Webhook outbound delivery (§7.4.11) is a server-to-
-client push and is documented separately in the spec.
+The mounted REST surface in `amc.app:app` is the canonical authority. The eight
+routers wired by `build_app()` are the seven message/attachment routes above
+plus `GET /healthz` (§7.4.10), which reports liveness, per-connector state, and
+webhook-queue depth. `GET /openapi.json`, `/docs`, and `/redoc` are
+re-registered behind `Depends(require_bearer)`.
+
+One spec route is **not** yet mounted: `POST /typing` (§7.4.6). Its router
+exists (`amc/api/typing.py`) but `build_app()` does not include it; it is a
+best-effort typing indicator slated for a follow-on wave. Webhook outbound
+delivery (§7.4.11) is a server-to-client push, not a mounted route — it is
+documented in the spec and in [Operations → Webhook Receiver](../operations/webhook-receiver.md).

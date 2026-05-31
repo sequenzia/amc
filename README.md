@@ -89,15 +89,24 @@ flowchart TD
 
 ## Quick Links
 
-Operator and reference docs (some land later in v1):
+The full operator and reference documentation lives under [`docs/`](docs/index.md)
+as a MkDocs (Material) site. Browse it on GitHub, or build/serve it locally:
 
-- [SETUP.md](SETUP.md) — operator runbook: macOS permissions, Discord bot
-  creation, `.env`, allowlist, `launchd` install. *(coming in v1)*
-- [docs/API.md](docs/API.md) — REST endpoints and MCP tool reference, generated
-  from the adapter's OpenAPI plus a hand-written MCP section.
-- [RUNBOOK.md](RUNBOOK.md) — common failures and recoveries (permission
-  revoked, gateway disconnect, AppleScript failing, webhook outage, Mac
-  asleep). *(coming in v1)*
+```bash
+uv sync --group docs
+uv run mkdocs serve   # http://127.0.0.1:8000
+```
+
+Key entry points:
+
+- [Setup Guide](docs/getting-started/index.md) — operator runbook: macOS
+  permissions, Discord bot creation, `.env`, allowlist, `launchd` install.
+- [REST API](docs/reference/rest-api.md) and [MCP Tools](docs/reference/mcp-tools.md)
+  — REST endpoints and MCP tool reference, generated from the adapter's OpenAPI
+  plus a hand-written MCP section.
+- [Runbook](docs/operations/runbook.md) — common failures and recoveries
+  (permission revoked, gateway disconnect, AppleScript failing, webhook outage,
+  Mac asleep).
 - [Spec](specs/agent-messaging-channel-SPEC.md) — full technical specification
   (requirements, architecture, data models, API contracts, test plan).
 - [Blueprint](internal/blueprints/agent-messaging-channel.md) — original

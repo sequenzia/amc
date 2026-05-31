@@ -27,7 +27,7 @@ mitigations called out in §13 (Risks R-1, R-3, R-5, R-8, R-10).
 7. [Migration failed](#7-migration-failed)
 8. [chat.db schema changed (future macOS release)](#8-chatdb-schema-changed-future-macos-release)
 9. [Identity-link split-brain](#9-identity-link-split-brain)
-10. [Quick reference: log + DB queries](#quick-reference-log--db-queries)
+10. [Quick reference: log and DB queries](#quick-reference-log-and-db-queries)
 
 ---
 
@@ -84,7 +84,7 @@ stat -f '%A %N' ~/.config/messaging-agent/.env
 
 | If diagnosis showed | Do this |
 |---|---|
-| `operation not permitted` on `chat.db` | Grant **Full Disk Access** to the adapter binary in System Settings → Privacy & Security → Full Disk Access. See `docs/SETUP-imessage-section.md` §1. After granting, fully restart the adapter (TCC reads at process start). |
+| `operation not permitted` on `chat.db` | Grant **Full Disk Access** to the adapter binary in System Settings → Privacy & Security → Full Disk Access. See the [Setup Guide](../getting-started/index.md#61-full-disk-access-fda). After granting, fully restart the adapter (TCC reads at process start). |
 | `MISSING .env` | `mkdir -p ~/.config/messaging-agent && cp .env.example ~/.config/messaging-agent/.env && chmod 600 ~/.config/messaging-agent/.env`, then fill in `AMC_BEARER_TOKEN` (generate via `python -c "import secrets; print(secrets.token_urlsafe(32))"`). |
 | `MISSING AMC_BEARER_TOKEN` | Edit `~/.config/messaging-agent/.env` and set the token. The adapter refuses to start without it. |
 | `MISSING allowlist.toml` | `touch ~/.config/messaging-agent/allowlist.toml` (empty allowlist is valid — every sender will land in quarantine). For real use, populate per spec §5.7. |
@@ -227,7 +227,7 @@ pmset -g assertions | grep -E 'PreventUserIdleSystemSleep|PreventSystemSleep'
 
 | Cause | Recovery |
 |---|---|
-| FDA denied to adapter | Re-grant FDA to the adapter's actual binary path (which may have changed across `uv` cache rebuilds or Python upgrades). See `docs/SETUP-imessage-section.md` §1, "Permission Recovery Checklist". Fully restart the adapter. |
+| FDA denied to adapter | Re-grant FDA to the adapter's actual binary path (which may have changed across `uv` cache rebuilds or Python upgrades). See the [Setup Guide](../getting-started/index.md#64-permission-recovery-checklist). Fully restart the adapter. |
 | Mac was asleep | Wake the Mac. The connector resumes from the persisted ROWID, so no inbound messages are lost — they will be processed in order. To prevent recurrence: launch the adapter under `caffeinate -dimsu --` or set Energy / Battery → "Prevent automatic sleeping when display is off". |
 | Messages.app not signed in | Open Messages.app and sign in with the operator's Apple ID. `chat.db` only receives writes when Messages.app is the running iMessage client. |
 | Connector stuck (last poll log > 1 min ago, FDA OK, Mac awake) | Restart the adapter: `amc service restart adapter`. The persisted ROWID cursor (spec §5.3 `connector_state`) ensures no missed rows. |
@@ -737,7 +737,7 @@ amc logs adapter --no-follow -n 500 | \
 
 ---
 
-## Quick reference: log + DB queries
+## Quick reference: log and DB queries
 
 The same handful of commands cover ~80% of diagnosis. Bookmark these.
 
@@ -798,11 +798,11 @@ Use sparingly; file an issue describing what `amc` couldn't recover from.
 
 ## See also
 
-- [`SETUP.md`](SETUP.md) — full macOS permission flow (FDA, Automation, sleep
-  prevention) referenced from scenarios 1, 3, and 4.
-- [`ops/launchd/README.md`](ops/launchd/README.md) — launchd plist install,
-  uninstall, update commands; logs paths.
-- [`specs/agent-messaging-channel-SPEC.md`](specs/agent-messaging-channel-SPEC.md)
+- [Setup Guide](../getting-started/index.md) — full macOS permission flow (FDA,
+  Automation, sleep prevention) referenced from scenarios 1, 3, and 4.
+- [`ops/launchd/README.md`](https://github.com/sequenzia/amc/blob/main/ops/launchd/README.md)
+  — launchd plist install, uninstall, update commands; logs paths.
+- [`specs/agent-messaging-channel-SPEC.md`](https://github.com/sequenzia/amc/blob/main/specs/agent-messaging-channel-SPEC.md)
   — the source of truth: §5.3 (storage schema), §5.5 (webhook retry policy),
   §5.7 (allowlist), §11.2 (env vars), §11.4 (this runbook's authoritative
   scenario list), §13 (risks R-1, R-3, R-5, R-8, R-10, R-11).

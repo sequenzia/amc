@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Test: `uv run pytest` (full suite); `uv run pytest tests/{unit-path}` for scoped
 - Stability: `uv run pytest tests/stability/test_stability_run.py` (default 60s; `AMC_STABILITY_DURATION_SECONDS=1800` for 30 min)
 - Docs lint: `make docs-lint` (or `uv run python scripts/docs_lint.py`)
+- Docs site: MkDocs Material under `docs/` (config `mkdocs.yml`). Install deps `uv sync --group docs`; preview `uv run mkdocs serve`; validate `uv run mkdocs build --strict`. The former root docs were migrated into the site (2026-05-31): `SETUP.md`→`docs/getting-started/index.md`, `RUNBOOK.md`→`docs/operations/runbook.md`, `docs/API.md`→`docs/reference/{rest-api,mcp-tools}.md`. `docs_lint.py` now globs `docs/**/*.md` so every site page is gated. Note: MkDocs `toc` and `docs_lint` slugify `&`/`+` in headings differently — avoid those chars in headings (use "and").
 
 **MCP wrapper (`mcp/`):**
 - Run: `uv run --project mcp amc-mcp` (stdio MCP server)

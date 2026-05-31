@@ -11,7 +11,7 @@ It assumes you are the owner-operator of the host Mac and have admin rights to g
 ## Table of Contents
 
 1. [Prerequisites](#1-prerequisites)
-2. [Clone & Install](#2-clone--install)
+2. [Clone and Install](#2-clone-and-install)
 3. [Environment Configuration](#3-environment-configuration)
 4. [Sender Allowlist](#4-sender-allowlist)
 5. [Discord Bot Setup](#5-discord-bot-setup)
@@ -20,7 +20,7 @@ It assumes you are the owner-operator of the host Mac and have admin rights to g
 8. [launchd Supervision](#8-launchd-supervision)
 9. [MCP Wrapper Installation](#9-mcp-wrapper-installation)
 10. [End-to-End Verification](#10-end-to-end-verification)
-11. [Updates & Rollback](#11-updates--rollback)
+11. [Updates and Rollback](#11-updates-and-rollback)
 12. [Troubleshooting Pointers](#12-troubleshooting-pointers)
 
 ---
@@ -45,7 +45,7 @@ The adapter does **not** require Docker, a database server, or any other Mac to 
 
 ---
 
-## 2. Clone & Install
+## 2. Clone and Install
 
 ```bash
 # Pick a stable install location — launchd will reference this path.
@@ -616,7 +616,7 @@ Open your MCP host (e.g. Claude Desktop) and ask the agent something like *"What
 
 ---
 
-## 11. Updates & Rollback
+## 11. Updates and Rollback
 
 Per spec §11.1, the update procedure is:
 
@@ -643,7 +643,7 @@ amc service restart adapter
 
 ## 12. Troubleshooting Pointers
 
-The full runbook lives in `RUNBOOK.md` (post-handoff). Quick-reference symptoms and where to look first:
+The full runbook lives in the [Operations Runbook](../operations/runbook.md). Quick-reference symptoms and where to look first:
 
 | Symptom | First place to check |
 |---------|----------------------|

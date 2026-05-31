@@ -66,16 +66,15 @@ ALLOWED_LANGS: frozenset[str] = frozenset(
 )
 
 # Glob patterns relative to REPO_ROOT. Order is irrelevant — results are
-# deduped and sorted.
+# deduped and sorted. The operator/reference docs (formerly SETUP.md, RUNBOOK.md,
+# docs/API.md at the repo root) now live under the MkDocs site at docs/**; the
+# recursive glob keeps every site page gated.
 DOC_GLOBS: tuple[str, ...] = (
     "README.md",
-    "SETUP.md",
-    "API.md",
-    "RUNBOOK.md",
     "internal/adrs/*.md",
     "internal/blueprints/*.md",
     "internal/notes/*.md",
-    "docs/*.md",
+    "docs/**/*.md",
 )
 
 

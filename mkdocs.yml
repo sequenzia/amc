@@ -1,0 +1,77 @@
+site_name: Agent Messaging Channel (AMC)
+site_description: >-
+  Agent Messaging Channel — a single-Mac service that exposes one AI agent on
+  iMessage and Discord behind a unified MCP + REST surface.
+site_url: ""
+repo_url: https://github.com/sequenzia/amc
+repo_name: sequenzia/amc
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - navigation.tracking
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.tabs.link
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+  - pymdownx.inlinehilite
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.snippets
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started/index.md
+  - Architecture:
+      - Overview: architecture/index.md
+      - Message Envelope: architecture/message-envelope.md
+      - Storage Schema: architecture/storage.md
+  - Connectors:
+      - Overview: connectors/index.md
+      - iMessage: connectors/imessage.md
+      - Discord: connectors/discord.md
+  - Reference:
+      - REST API: reference/rest-api.md
+      - MCP Tools: reference/mcp-tools.md
+      - Configuration: reference/configuration.md
+      - amc CLI: reference/cli.md
+  - Operations:
+      - Overview: operations/index.md
+      - Runbook: operations/runbook.md
+      - Webhook Receiver: operations/webhook-receiver.md
