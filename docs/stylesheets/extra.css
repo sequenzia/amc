@@ -3,14 +3,19 @@
    light values, rendering that text light-on-light. These variables inherit
    into Mermaid's (closed shadow-DOM) SVG — which is how Material themes it — so
    redefining them for slate restores dark-on-light labels without touching any
-   diagram source. Edge LINE color (--md-mermaid-edge-color) is intentionally
-   left at Material's light default so arrows stay visible on the dark page;
-   edge-label TEXT uses --md-mermaid-label-fg-color, which we darken. */
+   diagram source.
+
+   Edges are the awkward case: a single edge can cross both the dark page
+   background AND the hard-coded light node/subgraph fills, so neither a light
+   nor a dark stroke works. We use a mid-tone gray-blue that keeps ~3.8:1 on the
+   light fills and ~4:1 on the dark page — readable against both. */
 [data-md-color-scheme="slate"] {
   --md-mermaid-label-fg-color: #1b2330;          /* node + subgraph titles + edge-label text */
   --md-mermaid-label-bg-color: #eef1f6;          /* edge-label / actor / note chip backgrounds */
   --md-mermaid-node-fg-color: #5b4b86;           /* node/entity/actor borders */
   --md-mermaid-node-bg-color: #ece9f6;           /* ER entity + attribute fills, sequence frames */
+  --md-mermaid-edge-color: #737d91;              /* edges/arrows: mid-tone, visible on dark page AND light fills */
+  --md-mermaid-sequence-message-fg-color: #cfd6e2; /* message text floats over the dark page — keep it light */
   --md-mermaid-sequence-note-fg-color: #1b2330;  /* note text now sits on a light note box */
   --md-mermaid-sequence-loop-fg-color: #1b2330;  /* alt/par/loop labels on the now-light frame */
   --md-mermaid-sequence-box-fg-color: #1b2330;
