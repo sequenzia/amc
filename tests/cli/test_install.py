@@ -6,7 +6,7 @@ Coverage:
 * Functional: already-bootstrapped service is bootout'd before bootstrap.
 * Functional: not-bootstrapped service is bootstrapped without a bootout call.
 * Functional: idempotent re-run produces the same plist bytes and re-runs
-  bootout → bootstrap → enable.
+  bootout → enable → bootstrap.
 * Edge Case: ``~/Library/LaunchAgents/`` is created if missing.
 * Edge Case: existing plist with unknown contents is overwritten.
 * Edge Case: existing plist but service not bootstrapped → still installs.
@@ -91,7 +91,7 @@ class _LaunchctlRecorder:
 
     Builds a scriptable response table keyed on argv shape. Records every
     call's argv in the order it was made so tests can assert sequencing
-    (bootout → bootstrap → enable).
+    (bootout → enable → bootstrap).
     """
 
     def __init__(self) -> None:
@@ -262,6 +262,10 @@ def test_install_bootout_when_already_bootstrapped(tmp_path: Path) -> None:
     with (
         patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
         patch("amc.cli.launchctl._run", side_effect=fake_run),
+        # The async-bootout settle wait polls print_service; stub it out so
+        # this test asserts the bare verb sequence (settle is covered by its
+        # own dedicated test below).
+        patch("amc.cli.install._settle_after_bootout"),
     ):
         code = run_install(
             ["adapter"],
@@ -276,8 +280,8 @@ def test_install_bootout_when_already_bootstrapped(tmp_path: Path) -> None:
     # Filter to just the adapter's launchctl calls.
     adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
-    # Expected order: print → bootout → bootstrap → enable.
-    assert verbs == ["print", "bootout", "bootstrap", "enable"]
+    # Expected order: print → bootout → enable → bootstrap.
+    assert verbs == ["print", "bootout", "enable", "bootstrap"]
 
 
 def test_install_skips_bootout_when_not_bootstrapped(tmp_path: Path) -> None:
@@ -307,7 +311,7 @@ def test_install_skips_bootout_when_not_bootstrapped(tmp_path: Path) -> None:
     adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
     # No bootout in the sequence — service wasn't loaded.
-    assert verbs == ["print", "bootstrap", "enable"]
+    assert verbs == ["print", "enable", "bootstrap"]
 
 
 def test_install_idempotent_second_run(tmp_path: Path) -> None:
@@ -344,6 +348,9 @@ def test_install_idempotent_second_run(tmp_path: Path) -> None:
     with (
         patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
         patch("amc.cli.launchctl._run", side_effect=fake_run),
+        # Stub the async-bootout settle wait; it polls print_service and
+        # would otherwise add poll calls to the recorded verb sequence.
+        patch("amc.cli.install._settle_after_bootout"),
     ):
         code2 = run_install(
             ["adapter"],
@@ -356,10 +363,10 @@ def test_install_idempotent_second_run(tmp_path: Path) -> None:
     second_bytes = dest.read_bytes()
     # Idempotent on disk: same bytes after re-render.
     assert first_bytes == second_bytes
-    # Idempotent on launchctl: bootout → bootstrap → enable runs again.
+    # Idempotent on launchctl: bootout → enable → bootstrap runs again.
     adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
-    assert verbs == ["print", "bootout", "bootstrap", "enable"]
+    assert verbs == ["print", "bootout", "enable", "bootstrap"]
 
 
 # ---------------------------------------------------------------------------
@@ -457,11 +464,11 @@ def test_install_existing_plist_but_service_not_bootstrapped(tmp_path: Path) -> 
         )
 
     assert code == 0
-    # No bootout call — service wasn't loaded — but bootstrap + enable
+    # No bootout call — service wasn't loaded — but enable + bootstrap
     # still ran cleanly against the freshly-rewritten plist.
     adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
-    assert verbs == ["print", "bootstrap", "enable"]
+    assert verbs == ["print", "enable", "bootstrap"]
 
 
 # ---------------------------------------------------------------------------
@@ -608,6 +615,68 @@ def test_install_bootout_failure_exits_two(tmp_path: Path) -> None:
     assert code == 2
     assert "launchctl bootout" in err.getvalue()
     assert "adapter: failed" in out.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# _settle_after_bootout — async-bootout race guard
+# ---------------------------------------------------------------------------
+
+
+def test_settle_after_bootout_polls_until_unloaded() -> None:
+    """Returns as soon as ``print_service`` reports the label unloaded.
+
+    ``launchctl bootout`` is async; the settle wait must keep polling while
+    the service is still loaded and stop on the first ``loaded=False``,
+    sleeping between checks but never after the final one.
+    """
+    from amc.cli import install as install_mod
+    from amc.cli.launchctl import PrintResult
+
+    # Loaded for the first two checks, then torn down.
+    states = iter([True, True, False])
+    counts = {"print": 0, "sleep": 0}
+
+    def fake_print(label: str) -> PrintResult:
+        counts["print"] += 1
+        return PrintResult(label=label, loaded=next(states), returncode=0)
+
+    def fake_sleep(_seconds: float) -> None:
+        counts["sleep"] += 1
+
+    with patch("amc.cli.install.print_service", side_effect=fake_print):
+        install_mod._settle_after_bootout("com.user.amc-adapter", sleep=fake_sleep)
+
+    # Stopped on the 3rd check (first unloaded); slept twice between checks.
+    assert counts["print"] == 3
+    assert counts["sleep"] == 2
+
+
+def test_settle_after_bootout_is_bounded() -> None:
+    """A teardown that never completes still terminates the loop.
+
+    The wait is best-effort: when the bound is exhausted it returns and
+    lets the subsequent ``bootstrap`` surface the real error rather than
+    blocking ``amc install`` forever.
+    """
+    from amc.cli import install as install_mod
+    from amc.cli.launchctl import PrintResult
+
+    counts = {"print": 0, "sleep": 0}
+
+    def always_loaded(label: str) -> PrintResult:
+        counts["print"] += 1
+        return PrintResult(label=label, loaded=True, returncode=0)
+
+    def fake_sleep(_seconds: float) -> None:
+        counts["sleep"] += 1
+
+    with patch("amc.cli.install.print_service", side_effect=always_loaded):
+        install_mod._settle_after_bootout("com.user.amc-adapter", sleep=fake_sleep)
+
+    # Bounded: exactly _BOOTOUT_SETTLE_ATTEMPTS checks, one fewer sleep
+    # (no sleep follows the final check).
+    assert counts["print"] == install_mod._BOOTOUT_SETTLE_ATTEMPTS
+    assert counts["sleep"] == install_mod._BOOTOUT_SETTLE_ATTEMPTS - 1
 
 
 def test_install_mixed_targets_aggregate_max_code(tmp_path: Path) -> None:

@@ -30,10 +30,34 @@ console script then lands on PATH inside the venv.
      (default `~/.config/messaging-agent/agent_prompt.md`); falls back to
      the bundled `prompts/default_agent_prompt.md`.
    - The envelope JSON piped to stdin.
+   - A scrubbed environment: `ENABLE_TOOL_SEARCH=false` is forced and the
+     outer Claude Code session vars (`CLAUDECODE`, `CLAUDE_CODE_*`) are
+     stripped (see "Nested-agent environment hygiene" below).
 4. The webhook is ACK'd with `204` as soon as the envelope is enqueued
    (Claude can take many seconds; the adapter's HTTP timeout is 10s).
 5. Errors during processing are logged but do not surface back to the
    adapter — those are not transport errors and we already accepted.
+
+### Nested-agent environment hygiene
+
+`ClaudeRunner._build_env()` does **not** pass the raw parent environment to
+the nested `claude -p`. Two adjustments are critical:
+
+- **`ENABLE_TOOL_SEARCH=false`** (forced, overridable). Claude Code 2.1.x
+  defaults to *MCP tool search*: with it on, the four `mcp__amc__*` tools are
+  **deferred** behind the `ToolSearch` tool and the `amc` server reports
+  `status: pending` at session init. A headless one-shot agent then
+  intermittently concludes "the MCP server hasn't finished connecting" and
+  ends the turn **without ever loading or calling the tools** — so no reply is
+  sent. Forcing it off loads the four tools directly at init and makes Claude
+  block on a still-connecting server (`WaitForMcpServers`) before its first
+  tool call, which is deterministic. Set your own `ENABLE_TOOL_SEARCH` to
+  override. (Ref: <https://code.claude.com/docs/en/mcp.md#configure-tool-search>.)
+- **Scrub `CLAUDECODE` / `CLAUDE_CODE_*`.** When the receiver is launched from
+  inside an interactive Claude Code session (rather than under launchd), these
+  session vars leak in and would make the nested `claude` behave as part of the
+  outer session (shared session id, task list, tmpdir). Under launchd they are
+  absent, so the scrub is a no-op there.
 
 Concurrency: messages on the **same** `channel_id` process strictly in
 arrival order (one Claude invocation at a time per chat). Different
