@@ -97,6 +97,31 @@ uv sync --group docs
 uv run mkdocs serve   # http://127.0.0.1:8000
 ```
 
+### Deploying the docs
+
+The site is published to GitHub Pages at
+<https://sequenzia.github.io/amc/> by the
+[`docs` workflow](.github/workflows/docs.yml). Deployment is **manual** —
+it only runs when triggered, never automatically on push:
+
+```bash
+gh workflow run docs.yml --ref main
+```
+
+…or via the GitHub UI: **Actions → docs → Run workflow** (on `main`). The
+workflow installs the docs toolchain (`uv sync --only-group docs`), runs the
+docs linter and `mkdocs build --strict`, then publishes the built `site/` via
+`actions/deploy-pages` (artifact deployment — there is no `gh-pages` branch).
+Before the first run, set the repo's Pages source to **GitHub Actions**
+(Settings → Pages), or once via `gh api -X POST repos/sequenzia/amc/pages -f build_type=workflow`.
+
+Before triggering a deploy, validate locally with the same checks CI runs:
+
+```bash
+uv run python scripts/docs_lint.py   # or: make docs-lint
+uv run mkdocs build --strict
+```
+
 Key entry points:
 
 - [Setup Guide](docs/getting-started/index.md) — operator runbook: macOS
