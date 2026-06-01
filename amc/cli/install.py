@@ -10,8 +10,11 @@ Pipeline (per target service):
     3. If the service is already bootstrapped (detected via
        :func:`amc.cli.launchctl.print_service`), ``launchctl bootout`` it
        first so the new plist takes effect.
-    4. ``launchctl bootstrap gui/<uid> <plist>`` then ``launchctl enable
-       gui/<uid>/<label>``.
+    4. ``launchctl enable gui/<uid>/<label>`` then ``launchctl bootstrap
+       gui/<uid> <plist>``. Enable precedes bootstrap because a persistent
+       ``launchctl disable`` override (left behind by a prior ``amc service
+       disable``) makes ``bootstrap`` fail with ``5: Input/output error``
+       until the override is cleared.
 
 Exit codes (spec §5.3 AC):
 
@@ -33,6 +36,8 @@ from __future__ import annotations
 
 import os
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import IO
 
@@ -79,6 +84,38 @@ def _check_launch_agents_writable(home: Path) -> int | None:
     if dest_dir.exists() and not os.access(dest_dir, os.W_OK):
         return 3
     return None
+
+
+# ``launchctl bootout`` is asynchronous: it returns as soon as the teardown
+# is *requested*, not when it completes. Bootstrapping the same label again
+# before launchd has finished removing it loses the race and fails with the
+# generic ``5: Input/output error``. We poll ``print_service`` until the
+# label is gone from the domain, bounded so a genuinely stuck teardown can't
+# hang ``amc install`` forever. ~2 s total covers observed teardown latency
+# with comfortable margin; this only runs on the re-install (already-loaded)
+# path, never on a fresh install.
+_BOOTOUT_SETTLE_ATTEMPTS: int = 10
+_BOOTOUT_SETTLE_DELAY: float = 0.2
+
+
+def _settle_after_bootout(label: str, *, sleep: Callable[[float], object] = time.sleep) -> None:
+    """Best-effort wait until ``label`` is no longer loaded in the domain.
+
+    Polls :func:`amc.cli.launchctl.print_service` up to
+    :data:`_BOOTOUT_SETTLE_ATTEMPTS` times, sleeping
+    :data:`_BOOTOUT_SETTLE_DELAY` seconds between checks. Returns as soon as
+    the service reports ``loaded=False``. If the bound is exhausted it
+    returns anyway and lets the subsequent ``bootstrap`` make the final call
+    — surfacing launchctl's own error is better than blocking indefinitely.
+
+    ``sleep`` is injectable so tests can run the loop without real delays.
+    """
+    for attempt in range(_BOOTOUT_SETTLE_ATTEMPTS):
+        if not print_service(label).loaded:
+            return
+        # Don't sleep after the last check — nothing follows it.
+        if attempt < _BOOTOUT_SETTLE_ATTEMPTS - 1:
+            sleep(_BOOTOUT_SETTLE_DELAY)
 
 
 def _install_one(
@@ -129,7 +166,7 @@ def _install_one(
         print(f"Failed to write {dest}: {exc}", file=err)
         return 2
 
-    # --- launchctl bootout → bootstrap → enable --------------------------
+    # --- launchctl bootout → enable → bootstrap --------------------------
     # If the service is already bootstrapped, bootout first so the new
     # plist takes effect. ``print_service`` returns ``loaded=False`` when
     # launchctl could not find it, in which case bootout is unnecessary.
@@ -143,20 +180,33 @@ def _install_one(
                 file=err,
             )
             return 2
+        # bootout is async — wait for the teardown to actually complete
+        # before bootstrapping the same label, or the bootstrap races and
+        # fails with ``5: Input/output error``.
+        _settle_after_bootout(service.label)
 
-    result = bootstrap(service.label, str(dest))
+    # ``enable`` MUST precede ``bootstrap``. ``launchctl disable`` writes a
+    # persistent override into launchd's disabled database
+    # (``/var/db/com.apple.xpc.launchd/disabled.<uid>.plist``) that survives
+    # reboots, ``bootout``, and plist removal. While that override is set,
+    # ``launchctl bootstrap`` refuses the service with the generic
+    # ``5: Input/output error`` — so the override has to be cleared *first*.
+    # ``enable`` is a safe no-op when the label was never disabled and works
+    # even when the service is not currently loaded (it only touches the
+    # disabled DB). See spec §5.3.
+    result = enable(service.label)
     if not result.ok:
         print(
-            f"launchctl bootstrap failed for {service.label}: "
+            f"launchctl enable failed for {service.label}: "
             f"{result.stderr.strip() or result.returncode}",
             file=err,
         )
         return 2
 
-    result = enable(service.label)
+    result = bootstrap(service.label, str(dest))
     if not result.ok:
         print(
-            f"launchctl enable failed for {service.label}: "
+            f"launchctl bootstrap failed for {service.label}: "
             f"{result.stderr.strip() or result.returncode}",
             file=err,
         )

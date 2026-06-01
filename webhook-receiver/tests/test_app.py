@@ -137,6 +137,30 @@ async def test_webhook_happy_path_invokes_claude(
     assert DEFAULT_CHANNEL in inv["stdin"]
 
 
+async def test_webhook_invocation_env_is_clean(
+    client: httpx.AsyncClient,
+    fake_claude_log: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The spawned claude must get ENABLE_TOOL_SEARCH=false and no outer
+    Claude Code session vars (which leak in when the receiver is launched from
+    inside a Claude Code session)."""
+    # Simulate launch from inside a Claude Code session.
+    monkeypatch.setenv("CLAUDECODE", "1")
+    monkeypatch.setenv("CLAUDE_CODE_SESSION_ID", "outer-session")
+    monkeypatch.setenv("CLAUDE_CODE_ENABLE_TASKS", "1")
+    monkeypatch.delenv("ENABLE_TOOL_SEARCH", raising=False)
+
+    body = json.dumps(_envelope()).encode("utf-8")
+    resp = await client.post("/webhook", **_signed_request_kwargs(body))
+    assert resp.status_code == 204
+
+    inv = (await _wait_for_invocation_count(fake_claude_log, 1))[0]
+    assert inv["env"].get("ENABLE_TOOL_SEARCH") == "false"
+    assert "CLAUDECODE" not in inv["env"]
+    assert not any(k.startswith("CLAUDE_CODE_") for k in inv["env"])
+
+
 async def test_webhook_rejects_invalid_signature(client: httpx.AsyncClient) -> None:
     body = json.dumps(_envelope()).encode("utf-8")
     kwargs = _signed_request_kwargs(body)

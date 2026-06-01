@@ -67,6 +67,31 @@ _AMC_TOOLS = (
 # Output truncation for log fields — never log full prompt or full reply.
 _LOG_TAIL_BYTES = 2048
 
+# --- Environment hygiene for the nested ``claude -p`` --------------------
+#
+# Claude Code injects these vars into the processes it spawns. When the
+# receiver is launched from *inside* an interactive Claude Code session
+# (rather than under launchd), ``os.environ`` carries them and they would
+# leak into the nested ``claude -p``, where they make that process behave as
+# though it were part of the outer session (shared session id, task list,
+# tmpdir, SSE port, etc.). Scrub anything matching these so the nested agent
+# runs in a clean, predictable context regardless of how the receiver was
+# started. Under launchd none of these are set, so the scrub is a no-op.
+_SCRUBBED_ENV_EXACT = frozenset({"CLAUDECODE"})
+_SCRUBBED_ENV_PREFIXES = ("CLAUDE_CODE_",)
+
+# Force MCP tool-search OFF for the nested agent. With it on — the Claude Code
+# default when ``ENABLE_TOOL_SEARCH`` is unset — the four ``mcp__amc__*`` tools
+# are *deferred* behind the ToolSearch tool and the ``amc`` server reports
+# ``status: pending`` at init. The headless agent then intermittently concludes
+# "the MCP server hasn't finished connecting" and ends the turn WITHOUT loading
+# or calling the tools, so no reply is ever sent. Setting it to ``false`` loads
+# the four tools directly into the tool list at init and makes Claude block on a
+# still-connecting server (via WaitForMcpServers) before its first tool call —
+# i.e. deterministic. Operators may override by exporting their own value.
+# (See https://code.claude.com/docs/en/mcp.md#configure-tool-search.)
+_ENV_ENABLE_TOOL_SEARCH = "ENABLE_TOOL_SEARCH"
+
 
 @dataclass(frozen=True, slots=True)
 class RunResult:
@@ -174,10 +199,18 @@ class ClaudeRunner:
         return argv
 
     def _build_env(self) -> dict[str, str]:
-        # Inherit the parent process env (uv venv PATH, HOME, etc.). The MCP
-        # wrapper's env vars are injected via the --mcp-config JSON so we
-        # don't have to leak them into the wider Claude process env.
-        return dict(os.environ)
+        # Inherit the parent process env (uv venv PATH, HOME, ANTHROPIC creds,
+        # etc.). The MCP wrapper's own vars are injected via the --mcp-config
+        # JSON so we don't leak them into the wider Claude process env here.
+        # Scrub the outer Claude Code session vars and force tool-search off so
+        # the nested agent runs deterministically (see notes above).
+        env = {
+            k: v
+            for k, v in os.environ.items()
+            if k not in _SCRUBBED_ENV_EXACT and not k.startswith(_SCRUBBED_ENV_PREFIXES)
+        }
+        env.setdefault(_ENV_ENABLE_TOOL_SEARCH, "false")
+        return env
 
     async def run(self, envelope: dict[str, Any]) -> RunResult:
         """Execute ``claude -p`` for ``envelope`` and return a result snapshot."""

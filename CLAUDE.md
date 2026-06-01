@@ -49,6 +49,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AppleScript injection-safe pattern**: feed the script body via stdin (`osascript -`); pass user-supplied chat_guid/text/attachment_path as positional argv to an `on run argv` handler.
 - **SQLite TEXT-column ordering hazard**: emit fixed-width 6-digit microseconds in ISO 8601 strings (`'.' < 'Z'`).
 - **Alembic `env.py`** calls `logging.config.fileConfig(...)` which disables existing loggers — tests must re-enable target loggers explicitly.
+- **Nested `claude -p` defers MCP tools** (webhook-receiver): Claude Code 2.1.x defaults to *MCP tool search*, so the four `mcp__amc__*` tools are deferred behind `ToolSearch` and the `amc` server shows `status: pending` at init. A headless one-shot agent intermittently gives up ("server hasn't finished connecting") and never calls the tools → no reply. Fix: `ClaudeRunner._build_env()` forces `ENABLE_TOOL_SEARCH=false` (loads tools directly + uses `WaitForMcpServers`) and scrubs inherited `CLAUDECODE`/`CLAUDE_CODE_*` session vars (they leak in when the receiver is launched from inside a Claude Code session, not under launchd).
 
 ### Reusable patterns established
 - **Env-driven config**: `ENV_*` constants + typed helpers + `from_env()` classmethod + module-specific `*ConfigError`. Examples: `amc/core/{auth, logging, rate_limit, webhook, idempotency, sweepers}.py`.

@@ -31,7 +31,10 @@ def main() -> int:
         "env": {
             k: v
             for k, v in os.environ.items()
-            if k.startswith("AMC_") or k.startswith("FAKE_CLAUDE_")
+            if k.startswith("AMC_")
+            or k.startswith("FAKE_CLAUDE_")
+            or k.startswith("CLAUDE_CODE_")
+            or k in ("ENABLE_TOOL_SEARCH", "CLAUDECODE")
         },
         "cwd": os.getcwd(),
     }
