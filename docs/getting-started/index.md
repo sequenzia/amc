@@ -308,12 +308,12 @@ Run the adapter in the foreground first so any startup errors land on your termi
 uv run alembic upgrade head
 ```
 
-This creates `~/Library/Application Support/messaging-agent/amg.db` (or wherever `AMG_DB_PATH` points) with the spec §7.3 schema: `messages`, `channels`, `senders`, `identity_links`, plus connector state and webhook delivery tables. Alembic prints `Running upgrade` lines for each migration; the final line is `INFO  [alembic.runtime.migration] Will assume non-transactional DDL.` followed by silence.
+This creates `~/Library/Application Support/messaging-agent/state.db` (or wherever `AMG_DB_PATH` points) with the spec §7.3 schema: `messages`, `channels`, `senders`, `identity_links`, plus connector state and webhook delivery tables. Alembic prints `Running upgrade` lines for each migration; the final line is `INFO  [alembic.runtime.migration] Will assume non-transactional DDL.` followed by silence.
 
 To inspect afterwards:
 
 ```bash
-sqlite3 ~/Library/Application\ Support/messaging-agent/amg.db '.tables'
+sqlite3 ~/Library/Application\ Support/messaging-agent/state.db '.tables'
 ```
 
 ### 7.2 Start the adapter

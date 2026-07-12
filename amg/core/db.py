@@ -19,11 +19,10 @@ Design notes:
   cheap.
 - ``PRAGMA foreign_keys = ON`` is also set per connection because SQLite
   defaults to OFF and the schema relies on FK enforcement.
-- The default DB path matches what the spec uses elsewhere
-  (``~/Library/Application Support/messaging-agent/state.db``); the spec table
-  in §11.2 lists ``amg.db`` but the in-flight task mandates ``state.db`` to
-  match the rest of the build session — both names work, the path is what the
-  operator sees.
+- The default DB path is
+  ``~/Library/Application Support/messaging-agent/state.db``. The filename is
+  deliberately brand-free, so the AMC→AMG rename left the operator's database
+  where it was.
 """
 
 from __future__ import annotations

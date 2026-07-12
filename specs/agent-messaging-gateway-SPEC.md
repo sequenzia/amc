@@ -608,7 +608,7 @@ flowchart TD
 | Wrapper runtime | Python 3.12+ (matches adapter) | Single venv; one set of conventions |
 | Local store | SQLite (WAL) + filesystem | Single-host, low volume; no need for Postgres |
 | Process supervision | launchd | Native macOS; survives reboot; logs to `~/Library/Logs/` |
-| Backup | `cp` + launchd timer | Nightly file copy of `amg.db`, retain 7 days |
+| Backup | `cp` + launchd timer | Nightly file copy of `state.db`, retain 7 days |
 | Logging | `structlog` (or stdlib + JSON formatter) | Structured JSON, rotating files |
 | Tests | pytest + httpx + pytest-asyncio | Standard Python async testing toolkit |
 | Linting | ruff | Per global CLAUDE.md |
@@ -1336,7 +1336,7 @@ This section is intentionally empty: AMG is a new product with no prior code to 
 |-------------|-------------|-----------------|--------------|
 | launchd plist | `~/Library/LaunchAgents/com.user.amg-adapter.plist` | KeepAlive, RunAtLoad, log paths | — |
 | launchd plist validation test | Static check, no live launchd required | Lint the plist with `plutil -lint` and assert keys/paths via an automated test; manual reboot-cycle exercise is a deployment-time activity, not a build gate | — |
-| Backup launchd timer | Nightly `cp` of `amg.db` with rotation | Plist + shell script. The shell script itself is unit-tested against a temp DB, independently of launchd | — |
+| Backup launchd timer | Nightly `cp` of `state.db` with rotation | Plist + shell script. The shell script itself is unit-tested against a temp DB, independently of launchd | — |
 | Attachment retention sweeper | Daily delete of attachments older than 90 days | Async task or launchd timer; tested with an injectable clock that fast-forwards past the threshold | — |
 | Idempotency-key sweeper | Hourly delete of expired keys | Async task; same injectable-clock approach | — |
 | `README.md` | What it is, why, quick links | — | — |
@@ -1441,7 +1441,7 @@ Configuration is via env vars in `~/.config/messaging-agent/.env`. There are no 
 | `AMG_BIND_HOST` | HTTP bind | `127.0.0.1` |
 | `AMG_BIND_PORT` | HTTP bind | `8080` |
 | `AMG_BEARER_TOKEN` | API auth | (required, no default) |
-| `AMG_DB_PATH` | SQLite file | `~/Library/Application Support/messaging-agent/amg.db` |
+| `AMG_DB_PATH` | SQLite file | `~/Library/Application Support/messaging-agent/state.db` |
 | `AMG_ATTACHMENT_DIR` | Local attachment store | `~/Library/Application Support/messaging-agent/attachments` |
 | `AMG_LOG_DIR` | Log destination | `~/Library/Logs/messaging-agent` |
 | `AMG_ALLOWLIST_PATH` | Allowlist TOML | `~/.config/messaging-agent/allowlist.toml` |

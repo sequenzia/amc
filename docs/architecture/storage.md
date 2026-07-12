@@ -198,8 +198,11 @@ PRAGMA foreign_keys = ON;
 
 By default the database is `state.db` under `~/Library/Application Support/messaging-agent/`. The path is overridable with `AMG_DB_PATH`; see [Configuration](../reference/configuration.md).
 
-!!! info "`state.db` vs `amg.db`"
-    Some operator docs and the spec refer to the database file as `amg.db`. That is a tracked spec↔code divergence — **the code default is `state.db`.** When in doubt, trust `AMG_DB_PATH` (or the default `state.db`) over any doc that says `amg.db`.
+!!! note "Pre-rename docs said `amc.db`"
+    Older docs and the spec named this file `amc.db`, but nothing ever created
+    one — `state.db` has always been the code default, and the docs have been
+    corrected. If your `.env` still points `AMG_DB_PATH` at an `amc.db`, delete
+    the line.
 
 ## Inspecting the database
 

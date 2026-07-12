@@ -62,9 +62,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ### Spec ↔ code divergences flagged
 - `VALIDATION_FAILED` (in code) vs `VALIDATION_ERROR` (spec §7.4.12).
-- DB path default: `state.db` (in code) vs `amg.db` (spec §11.2).
+- ~~DB path default `state.db` vs `amc.db`~~ — **resolved** in the AMG rebrand: `state.db` everywhere.
 
 Tracked in `internal/notes/spec-code-divergences.md`. Resolve in a future spec revision.
+
+### Rebrand: AMC → AMG (2026-07-12)
+
+The project was renamed from Agent Messaging **Channel** to Agent Messaging **Gateway**. Two rules survive the rename and matter for any future work:
+
+- **`channel` is a domain noun, not the brand.** The `channels` table, `channel_id`, `channel_type`, `ChannelType`, `CHANNEL_NOT_FOUND`, `ChannelDispatcher`, `allowed_guild_channels`, and `AMG_RATE_LIMIT_PER_CHANNEL_RPS` all keep the word. Never rewrite `channel` → `gateway`.
+- **"Gateway" is Discord's word in this codebase** (`FakeDiscordGateway`, `gateway_url`, `DEFAULT_GATEWAY`, `discord.gateway`). The *product* is the Gateway; no AMG code symbol may contain "gateway". The code token is `amg`.
+
+Runtime state dirs (`~/.config/messaging-agent/`, `~/Library/Application Support/messaging-agent/state.db`, `~/Library/Logs/messaging-agent/`) carry **no brand token** and were deliberately left alone, so the rename moved no operator data. Alembic revision ids are brand-free, so an AMC-era DB needs no migration.
+
+`AMC_*` env vars are **ignored, not aliased** — there is no compat shim. `amg doctor` fails on any surviving `AMC_*` key, because only `AMG_BEARER_TOKEN` fails loudly on its own and a half-migrated `.env` otherwise degrades silently (no `AMG_WEBHOOK_URL` ⇒ the agent never replies, with no error).
 
 ## Project: Agent Messaging Gateway (AMG)
 

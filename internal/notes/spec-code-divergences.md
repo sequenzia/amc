@@ -43,32 +43,25 @@ code and document the drift in the blueprint reconciliation note.
 
 ---
 
-## D-2: Default SQLite path — `state.db` vs `amg.db`
+## D-2: Default SQLite path — `state.db` vs `amc.db` — **RESOLVED (code wins)**
 
-| Surface | Value | Locations |
-|---------|-------|-----------|
-| Code (canonical in tree) | `~/Library/Application Support/messaging-agent/state.db` | `amg/core/db.py:55`, `amg/migrations/env.py:33` |
-| Spec §11.2 (env var table) | `~/Library/Application Support/messaging-agent/amg.db` | spec line 1444 |
+Resolved during the AMC→AMG rebrand. The spec, `.env.example`, `backup.sh` and
+every doc now say **`state.db`**, matching `amg/core/db.py` and
+`amg/migrations/env.py`. Nothing had ever created an `amc.db`, so there was no
+data to move and no operator-side `mv` to perform.
 
-`state.db` is the historical name carried over from earlier task drafts; `amg.db`
-is the spec's later choice (per the project name). Neither file exists yet —
-nothing is broken, but the default the code installs to differs from the default
-the spec advertises in `SETUP.md`-equivalent material.
+The divergence was not harmless, as the original note assumed. `.env.example`
+shipped `AMC_DB_PATH=…/amc.db`, so an operator who copied it — as happened on
+the development machine — ran the adapter against a file that did not exist
+while Alembic migrated the `state.db` that did. `ops/scripts/backup.sh` had the
+same default and would have silently backed up nothing.
 
-The env var name `AMG_DB_PATH` is identical in both surfaces. Operators who set
-the env var explicitly are unaffected. The drift only matters for anyone
-reading the spec to find out where the file landed by default.
+Keeping the brand-free `state.db` is what let the rebrand leave the operator's
+database, logs and secrets untouched under `~/…/messaging-agent/`.
 
-`amg/core/db.py:23-26` already calls this drift out in a docstring.
-
-**Recommendation**: Keep `state.db` in code (do not rename — would require an
-operator-side `mv` for any deployment that already installed under the old name,
-plus updates to migrations/env.py and any docs that quote the path). Update
-spec §11.2's `AMG_DB_PATH` row to read `state.db` in a future spec revision.
-
-**Action required**: User confirms direction (code wins vs spec wins) before
-spec edit. Until then, treat `state.db` as the de-facto canonical default and
-document the drift in the blueprint reconciliation note.
+**Operator action**: if your `.env` still sets `AMG_DB_PATH` to a path ending in
+`amc.db`, delete the line and let the default resolve. See
+[the runbook](../../docs/operations/runbook.md#migrating-from-amc-to-amg).
 
 ---
 

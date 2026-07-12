@@ -36,7 +36,7 @@ These are read by the adapter process (`amg serve adapter`). Variables marked **
 | Variable | Required? | Default | Purpose |
 | --- | --- | --- | --- |
 | `AMG_BEARER_TOKEN` | **Yes** | — | Shared secret presented as `Authorization: Bearer <token>` on every REST call. The adapter refuses to start without it. |
-| `AMG_DB_PATH` | No | `~/Library/Application Support/messaging-agent/state.db` | SQLite database path. See the [state.db vs amg.db](#statedb-vs-amgdb) note below. |
+| `AMG_DB_PATH` | No | `~/Library/Application Support/messaging-agent/state.db` | SQLite database path. See [The database file](#the-database-file) below. |
 | `AMG_ALLOWLIST_PATH` | No | `~/.config/messaging-agent/allowlist.toml` | Path to the sender allowlist TOML. |
 | `AMG_ATTACHMENT_DIR` | No | `~/Library/Application Support/messaging-agent/attachments` | Directory where re-hosted attachment bytes are stored. |
 | `AMG_ATTACHMENT_RETENTION_DAYS` | No | `90` | The attachment sweeper deletes re-hosted bytes older than this many days. Must be a positive integer. |
@@ -75,14 +75,18 @@ AMG_DISCORD_BOT_TOKEN=replace-with-a-discord-bot-token
 # AMG_WEBHOOK_SECRET=replace-with-a-second-generated-token
 ```
 
-### state.db vs amg.db
+### The database file
 
-!!! warning "Tracked spec ↔ code divergence: trust `state.db`"
-    The code default for `AMG_DB_PATH` is `state.db` (`~/Library/Application Support/messaging-agent/state.db`). However, some operator docs and the spec (§11.2) refer to the database as `amg.db`. This is a known, tracked spec-versus-code divergence.
+The database is `state.db`, under `~/Library/Application Support/messaging-agent/`.
 
-    **Trust `state.db` as the actual default** unless you explicitly set `AMG_DB_PATH` to something else. If you have followed older instructions and created an `amg.db`, either point `AMG_DB_PATH` at it or rename the file to match the code default.
+!!! note "If you followed pre-rename instructions"
+    Older docs and the spec named the file `amc.db`, but nothing ever created
+    one — the code default has always been `state.db`. If your `.env` still sets
+    `AMG_DB_PATH` to a path ending in `amc.db` or `amg.db`, **delete the line**
+    and let the default resolve. See
+    [Migrating from AMC to AMG](../operations/runbook.md#migrating-from-amc-to-amg).
 
-    For the table layout the database holds, see the [Storage Schema](../architecture/storage.md).
+For the table layout the database holds, see the [Storage Schema](../architecture/storage.md).
 
 ## MCP wrapper environment variables
 

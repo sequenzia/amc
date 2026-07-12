@@ -7,7 +7,7 @@ This document covers spec §11.4 ("Runbook") and the post-handoff operator
 mitigations called out in §13 (Risks R-1, R-3, R-5, R-8, R-10).
 
 > Defaults referenced below (override in `~/.config/messaging-agent/.env`):
-> - `AMG_DB_PATH` = `~/Library/Application Support/messaging-agent/amg.db`
+> - `AMG_DB_PATH` = `~/Library/Application Support/messaging-agent/state.db`
 > - `AMG_ATTACHMENT_DIR` = `~/Library/Application Support/messaging-agent/attachments`
 > - `AMG_LOG_DIR` = `~/Library/Logs/messaging-agent`
 > - `AMG_ALLOWLIST_PATH` = `~/.config/messaging-agent/allowlist.toml`
@@ -28,6 +28,7 @@ mitigations called out in §13 (Risks R-1, R-3, R-5, R-8, R-10).
 8. [chat.db schema changed (future macOS release)](#8-chatdb-schema-changed-future-macos-release)
 9. [Identity-link split-brain](#9-identity-link-split-brain)
 10. [Quick reference: log and DB queries](#quick-reference-log-and-db-queries)
+11. [Migrating from AMC to AMG](#migrating-from-amc-to-amg)
 
 ---
 
@@ -195,7 +196,7 @@ amg logs adapter --no-follow -n 2000 | \
   grep -E 'imessage_(connector|poll|cursor)' | tail -n 50
 
 # What ROWID does the connector think it is at?
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT source, cursor, updated_at FROM connector_state WHERE source='imessage';"
 
 # What ROWID does chat.db actually have?
@@ -238,7 +239,7 @@ pmset -g assertions | grep -E 'PreventUserIdleSystemSleep|PreventSystemSleep'
 ```bash
 # Connector progresses on its own (poll interval is ~1s).
 sleep 5
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT cursor, updated_at FROM connector_state WHERE source='imessage';"
 # Expected: updated_at within the last few seconds.
 ```
@@ -331,11 +332,11 @@ mis-configured. The underlying messages stay in `/messages/unread`
 
 ```bash
 # Per-status counts. Healthy: mostly 'delivered', some 'pending'. Sick: lots of 'dead'.
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT status, COUNT(*) FROM webhook_deliveries GROUP BY status;"
 
 # Most recent dead-letter rows with their last error.
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT id, message_id, attempt, last_response_code, substr(last_error, 1, 80), updated_at
    FROM webhook_deliveries WHERE status='dead' ORDER BY updated_at DESC LIMIT 10;"
 
@@ -360,7 +361,7 @@ curl -sS -o /dev/null -w "status=%{http_code} time=%{time_total}s\n" \
 grep '^AMG_WEBHOOK_SECRET=' ~/.config/messaging-agent/.env
 
 # 3. Is the receiver returning 4xx? (4xx = no retry, immediate dead-letter.)
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT last_response_code, COUNT(*) FROM webhook_deliveries
    WHERE status='dead' GROUP BY last_response_code ORDER BY 2 DESC;"
 # 400/401/403 → bad signature / auth. 404 → wrong path. 422 → schema mismatch.
@@ -393,7 +394,7 @@ call `GET /messages/unread` to drain the queue.
 
 ```bash
 # Watch the count of 'pending' rise (new messages) and 'delivered' rise as they ship.
-watch -n 5 'sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+watch -n 5 'sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT status, COUNT(*) FROM webhook_deliveries GROUP BY status;"'
 ```
 
@@ -421,7 +422,7 @@ find ~/Library/Application\ Support/messaging-agent/attachments \
   -type f -exec du -h {} + 2>/dev/null | sort -rh | head -n 20
 
 # How many attachment rows do we have, and how old are they?
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" <<'SQL'
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" <<'SQL'
 SELECT
   COUNT(*) AS total,
   SUM(CASE WHEN bytes_path IS NOT NULL THEN 1 ELSE 0 END) AS with_bytes,
@@ -442,7 +443,7 @@ amg logs adapter --no-follow -n 2000 | \
 # How many rows are older than the current threshold and still on disk?
 THRESHOLD=$(grep '^AMG_ATTACHMENT_RETENTION_DAYS=' \
   ~/.config/messaging-agent/.env | cut -d= -f2)
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT COUNT(*) FROM attachments
    WHERE bytes_path IS NOT NULL
      AND created_at < datetime('now', '-${THRESHOLD:-90} days');"
@@ -470,7 +471,7 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
    ```bash
    # CAUTION: deletes attachment bytes older than 14 days from BOTH disk and the
    # bytes_path column. The attachment row stays so messages still reference it.
-   sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" <<'SQL'
+   sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" <<'SQL'
    SELECT bytes_path FROM attachments
    WHERE bytes_path IS NOT NULL
      AND created_at < datetime('now', '-14 days');
@@ -485,7 +486,7 @@ sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
 du -sh ~/Library/Application\ Support/messaging-agent/attachments
 # Should be markedly smaller. Re-check df -h.
 
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT COUNT(*) FROM attachments WHERE bytes_path IS NOT NULL;"
 # Should drop after the sweep runs.
 ```
@@ -513,8 +514,8 @@ uv run alembic history --verbose | head -n 40
 uv run alembic upgrade head 2>&1 | tail -n 80
 
 # Take a defensive snapshot before touching anything.
-cp "$HOME/Library/Application Support/messaging-agent/amg.db" \
-   "$HOME/Library/Application Support/messaging-agent/amg.db.before-recovery-$(date +%s)"
+cp "$HOME/Library/Application Support/messaging-agent/state.db" \
+   "$HOME/Library/Application Support/messaging-agent/state.db.before-recovery-$(date +%s)"
 ```
 
 ### Recover
@@ -553,8 +554,8 @@ revision:
 
 ```bash
 # DESTRUCTIVE — overwrites the live DB with the snapshot.
-cp "$HOME/Library/Application Support/messaging-agent/amg.db.before-recovery-<ts>" \
-   "$HOME/Library/Application Support/messaging-agent/amg.db"
+cp "$HOME/Library/Application Support/messaging-agent/state.db.before-recovery-<ts>" \
+   "$HOME/Library/Application Support/messaging-agent/state.db"
 uv run alembic stamp <prior-good-revision-id>
 # Then fix and re-upgrade.
 ```
@@ -599,7 +600,7 @@ sqlite3 "file:$HOME/Library/Messages/chat.db?mode=ro" \
 
 # Pull a few raw_json snapshots from the affected window to compare against
 # what the decoder expected.
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT id, source, message_ts, substr(raw_json, 1, 400)
    FROM messages WHERE source='imessage'
    ORDER BY message_ts DESC LIMIT 5;"
@@ -631,7 +632,7 @@ since none of the source data is lost.
 ### Confirm
 
 ```bash
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT cursor, updated_at FROM connector_state WHERE source='imessage';"
 # updated_at advances; cursor crosses the post-upgrade ROWID range without errors.
 
@@ -665,14 +666,14 @@ amg logs adapter --no-follow -n 5000 | \
   grep -E 'person_id.*(single|alone|one_entry|split)' | tail -n 50
 
 # 2. Inspect the materialized identity_links table — how many rows per person_id?
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT person_id, COUNT(*) AS link_count
    FROM identity_links GROUP BY person_id ORDER BY link_count;"
 # Healthy cross-platform link: link_count >= 2 (one per source).
 # Split-brain: link_count = 1 for a person_id that *should* span platforms.
 
 # 3. Cross-check senders by display_name to spot duplicates that should be one.
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT display_name, source, sender_id, person_id
    FROM senders ORDER BY display_name;"
 # Two rows with the same display_name but different person_id values
@@ -726,7 +727,7 @@ cat ~/.config/messaging-agent/allowlist.toml
 
 ```bash
 # After SIGHUP — every cross-platform person_id now has link_count >= 2.
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT person_id, COUNT(*) AS link_count
    FROM identity_links GROUP BY person_id ORDER BY link_count;"
 
@@ -761,16 +762,16 @@ amg status
 curl -sS http://127.0.0.1:8080/healthz | jq .
 
 # Webhook delivery state.
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT status, COUNT(*) FROM webhook_deliveries GROUP BY status;"
 
 # Connector cursors (where each connector left off).
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT source, cursor, updated_at FROM connector_state;"
 
 # Quarantine size (allowlist_status='unknown' messages — if growing fast,
 # operator probably needs to add a sender to the allowlist).
-sqlite3 "$HOME/Library/Application Support/messaging-agent/amg.db" \
+sqlite3 "$HOME/Library/Application Support/messaging-agent/state.db" \
   "SELECT COUNT(*) FROM messages WHERE allowlist_status='unknown';"
 
 # Disk usage of the attachment store.
@@ -782,6 +783,124 @@ amg service restart adapter
 # Reload allowlist without a restart (SIGHUP the supervised PID).
 kill -HUP "$(amg status adapter --json | jq -r '.pid')"
 ```
+
+## Migrating from AMC to AMG
+
+The project was renamed from **Agent Messaging Channel (AMC)** to **Agent
+Messaging Gateway (AMG)**. Every name that crosses a process boundary moved
+with it: the `AMC_*` env vars, the `X-AMC-Signature` webhook header, the
+`mcp__amc__*` tool names, the `com.user.amc-*` launchd labels, and the `amc`
+CLI itself.
+
+!!! danger "`AMC_*` is ignored, not aliased"
+    There is no back-compat shim. A leftover `AMC_*` key is silently
+    **ignored** — and only `AMG_BEARER_TOKEN` fails loudly when absent. Rename
+    just that one key and the adapter boots green while `AMG_WEBHOOK_URL` is
+    still unset, which disables webhook delivery: **the agent stops replying to
+    anything, with no error in any log.** Migrate every key at once, then run
+    `amg doctor`, which fails on any surviving `AMC_*` key.
+
+### What does *not* move
+
+The runtime state directories carry no brand token and are deliberately left
+alone. Your database, logs, secrets and allowlist stay exactly where they are:
+
+| | Path |
+| --- | --- |
+| Database | `~/Library/Application Support/messaging-agent/state.db` |
+| Secrets | `~/.config/messaging-agent/.env` |
+| Allowlist | `~/.config/messaging-agent/allowlist.toml` |
+| Logs | `~/Library/Logs/messaging-agent/` |
+
+Alembic revision ids contain no brand token either, so an AMC-era `state.db`
+is read by AMG unchanged — **there is no migration to run and no message
+history to move.**
+
+### Step 1 — uninstall the old services *first*
+
+Do this **while the `amc` CLI still works**, before pulling the rename.
+
+```bash
+amc uninstall
+amc status          # expect: not loaded
+```
+
+This ordering is not optional. `amg install` only knows the new labels, so it
+will not bootout the old ones; and `amg uninstall` cannot help you afterwards
+either — `resolve_targets()` raises `UnknownServiceError` on a
+`com.user.amc-*` label, because it is no longer in the registry. Skip this step
+and you get two jobs contending for port 8080 in a crash-respawn loop, while
+`amg doctor` reports all-green.
+
+If you have already pulled the rename and no longer have an `amc` CLI, do it by
+hand — note that `webhook-receiver` is the one label whose suffix differs from
+its CLI short name (`receiver`), so a loop over `adapter receiver backup` will
+silently miss it:
+
+```bash
+for label in amc-adapter amc-webhook-receiver amc-backup; do
+  launchctl enable  "gui/$(id -u)/com.user.${label}"   # clear any disabled-DB override
+  launchctl bootout "gui/$(id -u)/com.user.${label}"   # exit 3 == already gone; fine
+done
+rm -f ~/Library/LaunchAgents/com.user.amc-*.plist
+```
+
+### Step 2 — re-key the `.env`
+
+Back it up first: this file holds the only copy of your bearer token, webhook
+secret, and Discord bot token.
+
+```bash
+cp -p ~/.config/messaging-agent/.env ~/.config/messaging-agent/.env.amc.bak
+
+# Rename the key PREFIX only. Anchored at ^, so a *value* containing "AMC_"
+# cannot be corrupted, and AMG_RATE_LIMIT_PER_CHANNEL_RPS keeps PER_CHANNEL.
+LC_ALL=C sed -i '' -E 's/^([[:space:]]*(export[[:space:]]+)?)AMC_/\1AMG_/' \
+  ~/.config/messaging-agent/.env
+chmod 600 ~/.config/messaging-agent/.env
+
+grep -c '^AMC_' ~/.config/messaging-agent/.env    # expect 0
+```
+
+If your `.env` sets `AMG_DB_PATH` to a path ending in `amc.db`, **delete that
+line.** No such file was ever created — the code default has always been
+`state.db`, which is where your data actually is. Removing the line lets the
+default resolve correctly. (`.env.example` shipped the wrong value; it is fixed
+now.)
+
+### Step 3 — rebuild and reinstall
+
+```bash
+cd /path/to/amg
+rm -rf .venv && uv sync --all-packages    # never reuse a venv across the rename
+uv run amg doctor                         # 'no legacy AMC_* env keys' must be ok
+uv run amg install
+uv run amg status
+```
+
+### Step 4 — repoint the MCP host
+
+Any MCP client that registered the wrapper under the old name must be updated:
+the server key `amc` becomes `amg`, so the tools it exposes are now
+`mcp__amg__send_message` and friends. Re-add the server per
+[Setup](../getting-started/index.md), and update any `AMC_BEARER_TOKEN` /
+`AMC_AGENT_ID` / `AMC_BASE_URL` entries in the host's own config to `AMG_*`.
+
+(The webhook receiver spawns its nested agent with `--strict-mcp-config` and
+generates the config itself, so it needs no change.)
+
+### Step 5 — clean up shell completion
+
+If you ever ran `amc --install-completion`, the generated script is now dead:
+
+```bash
+rm -f ~/.zfunc/_amc                       # bash: ~/.bash_completions/amc.sh
+# ...and remove the _AMC_COMPLETE / _amc line it appended to your ~/.zshrc
+uv run amg --install-completion zsh
+```
+
+`amg doctor` fails on a stale `_AMC_COMPLETE` in the environment, so it will
+tell you if you missed this.
 
 ## Escape hatch: raw `launchctl`
 

@@ -24,7 +24,7 @@ env/
 .coverage
 htmlcov/
 
-# SQLite sidecar files (chat.db / amg.db live ones)
+# SQLite sidecar files (chat.db / state.db live ones)
 *.db-journal
 *.db-shm
 *.db-wal
