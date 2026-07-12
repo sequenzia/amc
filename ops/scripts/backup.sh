@@ -14,7 +14,7 @@
 # running twice in the same calendar day overwrites the same target file.
 #
 # Environment:
-#   AMC_DB_PATH  — source SQLite file (default: ~/Library/Application Support/messaging-agent/amc.db)
+#   AMC_DB_PATH  — source SQLite file (default: ~/Library/Application Support/messaging-agent/state.db)
 #   AMC_LOG_DIR  — log destination     (default: ~/Library/Logs/messaging-agent)
 #
 # Exit codes:
@@ -26,7 +26,7 @@
 set -uo pipefail
 
 # ---- defaults (mirror spec §11.2) ------------------------------------------
-DEFAULT_DB="${HOME}/Library/Application Support/messaging-agent/amc.db"
+DEFAULT_DB="${HOME}/Library/Application Support/messaging-agent/state.db"
 DEFAULT_LOG_DIR="${HOME}/Library/Logs/messaging-agent"
 DEFAULT_BACKUP_DIR="${HOME}/Library/Application Support/messaging-agent/backups"
 
