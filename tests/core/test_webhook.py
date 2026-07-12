@@ -1,4 +1,4 @@
-"""Tests for the outbound webhook delivery worker (``amc.core.webhook``).
+"""Tests for the outbound webhook delivery worker (``amg.core.webhook``).
 
 Covers spec §5.5 (acceptance criteria), §6.4 (retry policy), §7.4.11
 (header table), and OQ-6 (refuse-to-start when URL set without secret).
@@ -30,8 +30,8 @@ import respx
 from alembic import command
 from alembic.config import Config
 
-from amc.core.db import build_database_url, create_engine_from_env, create_session_factory
-from amc.core.webhook import (
+from amg.core.db import build_database_url, create_engine_from_env, create_session_factory
+from amg.core.webhook import (
     BACKOFF_SECONDS,
     ENV_WEBHOOK_SECRET,
     ENV_WEBHOOK_URL,
@@ -48,7 +48,7 @@ from amc.core.webhook import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
-WEBHOOK_URL = "https://receiver.example/hooks/amc"
+WEBHOOK_URL = "https://receiver.example/hooks/amg"
 WEBHOOK_SECRET = "shared-secret-1234567890"  # noqa: S105 - test fixture
 
 
@@ -81,7 +81,7 @@ class _FakeClock:
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Tmp_path SQLite file with the full schema applied via alembic."""
     db_path = tmp_path / "webhook.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     yield db_path
@@ -200,7 +200,7 @@ def test_config_returns_none_when_url_unset_secret_set():
 
 def test_config_refuses_when_url_set_secret_missing_OQ6():
     """OQ-6: URL set without secret → adapter refuses to start."""
-    with pytest.raises(WebhookConfigError, match="AMC_WEBHOOK_SECRET"):
+    with pytest.raises(WebhookConfigError, match="AMG_WEBHOOK_SECRET"):
         load_webhook_config_from_env({ENV_WEBHOOK_URL: WEBHOOK_URL})
 
 
@@ -262,7 +262,7 @@ def test_compute_signature_changes_with_secret():
 
 
 async def test_enqueue_disabled_returns_none_and_creates_no_row(session_factory, fresh_db: Path):
-    """`AMC_WEBHOOK_URL` unset → no rows produced (spec §5.5)."""
+    """`AMG_WEBHOOK_URL` unset → no rows produced (spec §5.5)."""
     async with session_factory() as session:
         result = await enqueue_webhook(session, "msg_x", config=None)
         await session.commit()
@@ -341,14 +341,14 @@ async def test_tick_delivers_2xx_and_records_headers_signature(session_factory, 
     # Headers (spec §7.4.11)
     headers = captured_request["headers"]
     assert headers["content-type"] == "application/json"
-    assert headers["x-amc-delivery-id"] == delivery_id
-    assert headers["x-amc-message-id"] == "msg_01HXYZ1234567890ABCDEFGHJK"
-    assert headers["x-amc-attempt"] == "1"
+    assert headers["x-amg-delivery-id"] == delivery_id
+    assert headers["x-amg-message-id"] == "msg_01HXYZ1234567890ABCDEFGHJK"
+    assert headers["x-amg-attempt"] == "1"
 
     # Signature: HMAC over the EXACT bytes the receiver sees.
     body_bytes = captured_request["body"]
     expected_sig = compute_signature(WEBHOOK_SECRET, body_bytes)
-    assert headers["x-amc-signature"] == expected_sig
+    assert headers["x-amg-signature"] == expected_sig
 
     # Body is the envelope JSON; round-trip parse.
     payload = json.loads(body_bytes)
@@ -790,7 +790,7 @@ async def test_tick_processes_rows_in_next_retry_at_ascending_order(
     seen_order: list[str] = []
 
     def _record(request: httpx.Request) -> httpx.Response:
-        seen_order.append(request.headers["x-amc-message-id"])
+        seen_order.append(request.headers["x-amg-message-id"])
         return httpx.Response(200)
 
     with respx.mock() as router:

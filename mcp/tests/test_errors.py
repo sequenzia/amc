@@ -1,19 +1,19 @@
-"""Unit tests for ``amc_mcp.errors`` (mirrors errors.test.ts)."""
+"""Unit tests for ``amg_mcp.errors`` (mirrors errors.test.ts)."""
 
 from __future__ import annotations
 
 import re
 from typing import Any
 
-from amc_mcp.config import (
+from amg_mcp.config import (
     ENV_AGENT_ID,
     ENV_BASE_URL,
     ENV_BEARER_TOKEN,
     load_config,
     reset_config,
 )
-from amc_mcp.errors import map_http_error_to_mcp_response
-from amc_mcp.http_client import NETWORK_ERROR_STATUS, HttpErr
+from amg_mcp.errors import map_http_error_to_mcp_response
+from amg_mcp.http_client import NETWORK_ERROR_STATUS, HttpErr
 
 
 def _err(**partial: Any) -> HttpErr:
@@ -53,7 +53,7 @@ class TestKnownCodes:
                 _err(status=401, code="UNAUTHORIZED", message="bad token")
             )
         )
-        assert text == "Bearer token rejected by adapter. Check AMC_BEARER_TOKEN."
+        assert text == "Bearer token rejected by adapter. Check AMG_BEARER_TOKEN."
 
     def test_agent_id_required(self) -> None:
         text = _text_of(
@@ -238,7 +238,7 @@ class TestNetworkErrors:
                 )
             )
         )
-        assert text == "Cannot reach adapter at AMC_BASE_URL. Is it running?"
+        assert text == "Cannot reach adapter at AMG_BASE_URL. Is it running?"
 
     def test_tolerates_throwing_override(self) -> None:
         def _raise() -> str:
@@ -254,4 +254,4 @@ class TestNetworkErrors:
                 resolve_base_url=_raise,
             )
         )
-        assert text == "Cannot reach adapter at AMC_BASE_URL. Is it running?"
+        assert text == "Cannot reach adapter at AMG_BASE_URL. Is it running?"

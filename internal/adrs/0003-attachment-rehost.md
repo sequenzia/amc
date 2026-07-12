@@ -15,16 +15,16 @@ The normalized envelope (blueprint §3) ships an `attachments[].url` field that 
 - **Option A — pass-through.** Put the Discord CDN URL directly in the envelope; put `file://` for iMessage paths. Cheap, but the agent gets a value it cannot reliably use: Discord URLs expire, file URLs only work from the same Mac.
 - **Option B — re-host.** The adapter pulls the bytes (HTTP GET for Discord, filesystem read for iMessage) into a local store, assigns a stable `att_<ULID>` ID, persists `(id, message_id, mime, size_bytes, bytes_path, original_url_or_path)` in an `attachments` table, and exposes the file at `GET /attachments/{id}` with the same bearer auth as the rest of the API.
 
-This is exactly the kind of decision the blueprint flagged in §9 ("Attachment handling"). The user's framing of REQ-AMC-008 made it concrete: the agent needs **stable URLs across replays** so that context fetches days later can still serve the bytes.
+This is exactly the kind of decision the blueprint flagged in §9 ("Attachment handling"). The user's framing of REQ-AMG-008 made it concrete: the agent needs **stable URLs across replays** so that context fetches days later can still serve the bytes.
 
 ## Decision
 
 The adapter **re-hosts** every inbound attachment.
 
-- On message ingest, each attachment is downloaded (Discord) or copied (iMessage) into `AMC_ATTACHMENT_DIR` (default `~/Library/Application Support/messaging-agent/attachments/`), with the original bytes preserved verbatim.
+- On message ingest, each attachment is downloaded (Discord) or copied (iMessage) into `AMG_ATTACHMENT_DIR` (default `~/Library/Application Support/messaging-agent/attachments/`), with the original bytes preserved verbatim.
 - Each re-hosted file gets an `att_<ULID>` ID, persisted as a row in the `attachments` table with `bytes_path` pointing at the local copy and `original_url_or_path` retained for forensics.
 - The `attachments[].url` field on the envelope is **always** the adapter URL: `http://<bind>/attachments/{id}`, served by an authenticated route that streams from `bytes_path`.
-- Outbound `attachments[]` (in `POST /messages/send`) accept either a URL or a path. The adapter re-hosts before delivery: it copies to `AMC_ATTACHMENT_DIR`, assigns an `att_` ID, then hands the bytes to the platform connector. This means an outbound attachment is queryable via `GET /attachments/{id}` after the send completes.
+- Outbound `attachments[]` (in `POST /messages/send`) accept either a URL or a path. The adapter re-hosts before delivery: it copies to `AMG_ATTACHMENT_DIR`, assigns an `att_` ID, then hands the bytes to the platform connector. This means an outbound attachment is queryable via `GET /attachments/{id}` after the send completes.
 
 If an iMessage attachment file disappears from disk before the adapter can re-host it (e.g., user emptied the Messages cache), the message is still ingested, the attachment is dropped from the envelope, and the original path is preserved in `attachments_json` on the `messages` row for forensics. Logged at WARN.
 
@@ -61,5 +61,5 @@ If an iMessage attachment file disappears from disk before the adapter can re-ho
 - Blueprint §3 — Normalized message envelope (`attachments[].url`, `attachments[].id`, `attachments[].size_bytes`)
 - Blueprint §5.3 — `attachments` table
 - Blueprint §9 — original "Attachment handling" open question (now resolved)
-- Spec §5.8 / REQ-AMC-008 — Attachment re-hosting feature
-- Spec §11.2 — `AMC_ATTACHMENT_DIR` env var
+- Spec §5.8 / REQ-AMG-008 — Attachment re-hosting feature
+- Spec §11.2 — `AMG_ATTACHMENT_DIR` env var

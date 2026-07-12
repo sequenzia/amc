@@ -14,11 +14,11 @@ Verifies the iMessage connector's persisted-cursor recovery contract:
 Scenario walked end-to-end
 --------------------------
 
-1. Build a fresh AMC SQLite DB (``alembic upgrade head``) and a writable
+1. Build a fresh AMG SQLite DB (``alembic upgrade head``) and a writable
    copy of the Phase 0 chat.db fixture.
 2. Construct + start the real
-   :class:`amc.connectors.imessage.connector.ImessageConnector` against
-   the real :class:`amc.core.message_sink.MessageSink` (no webhook
+   :class:`amg.connectors.imessage.connector.ImessageConnector` against
+   the real :class:`amg.core.message_sink.MessageSink` (no webhook
    config — webhook fan-out is out of scope here).
 3. Inject 5 inbound chat.db rows with ROWIDs strictly greater than the
    fixture's ``MAX(message.ROWID)`` (so the fresh-install seed past the
@@ -31,7 +31,7 @@ Scenario walked end-to-end
    how a graceful shutdown drains the in-flight cycle).
 6. Inject 5 more chat.db rows *while the connector is stopped* with
    ROWIDs strictly greater than the previous batch.
-7. Construct + start a second connector against the SAME AMC DB and
+7. Construct + start a second connector against the SAME AMG DB and
    chat.db copy. The cursor row from step 4 is the recovery trigger.
 8. Assert:
    * All 10 injected rows are present in ``messages`` exactly once
@@ -63,12 +63,12 @@ from pathlib import Path
 import pytest
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.connectors.imessage.connector import ImessageConnector
-from amc.connectors.imessage.reader import ChatDbReader
-from amc.core.allowlist import AllowlistLoader
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.message_sink import MessageSink
+from amg.connectors.imessage.connector import ImessageConnector
+from amg.connectors.imessage.reader import ChatDbReader
+from amg.core.allowlist import AllowlistLoader
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.message_sink import MessageSink
 from tests.e2e._helpers import (
     append_chat_db_inbound_row,
     apply_alembic_head,
@@ -126,9 +126,9 @@ def chat_db_copy(src_chat_db_path: Path, tmp_path: Path) -> Path:
 
 @pytest.fixture
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
-    """Fresh AMC SQLite file with the full migrations applied."""
-    db_path = tmp_path / "amc-cursor-recovery.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    """Fresh AMG SQLite file with the full migrations applied."""
+    db_path = tmp_path / "amg-cursor-recovery.db"
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     apply_alembic_head(ALEMBIC_INI, db_path)
     yield db_path
 
@@ -167,7 +167,7 @@ def real_sink(
     session_factory: async_sessionmaker,
     allowlist: AllowlistLoader,
 ) -> MessageSink:
-    """Real sink against the migrated AMC DB. No webhook fan-out."""
+    """Real sink against the migrated AMG DB. No webhook fan-out."""
     return MessageSink(
         session_factory=session_factory,
         allowlist=allowlist,
@@ -322,7 +322,7 @@ async def test_cursor_recovery_no_duplicates_across_stop_restart(
     assert _max_chat_db_rowid(chat_db_copy) == max_post_stop_rowid
 
     # ------------------------------------------------------------------
-    # Phase 4 -- restart with a fresh connector against the SAME AMC DB
+    # Phase 4 -- restart with a fresh connector against the SAME AMG DB
     # and chat.db copy. The persisted cursor from phase 1 is the
     # recovery trigger; the WHERE ROWID > cursor clause filters the
     # 5 already-drained rows at SQL.

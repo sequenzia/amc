@@ -1,16 +1,16 @@
 """Tests for the top-level Typer CLI scaffold.
 
 Spec references:
-* §5.9 Top-Level UX — ``amc --help`` lists every command; ``amc service
-  --help`` lists every lifecycle subcommand; ``amc --version`` prints the
+* §5.9 Top-Level UX — ``amg --help`` lists every command; ``amg service
+  --help`` lists every lifecycle subcommand; ``amg --version`` prints the
   package version.
 * §9.1 Phase 1 — these acceptance criteria gate the Foundation phase.
 
 Coverage:
 * ``--help`` mentions every top-level command (Functional).
-* ``amc service --help`` mentions every service subcommand (Functional).
+* ``amg service --help`` mentions every service subcommand (Functional).
 * ``--version`` returns the installed package version (Functional).
-* Bare ``amc`` (no args) prints help and exits zero (Edge Case).
+* Bare ``amg`` (no args) prints help and exits zero (Edge Case).
 * Unknown command exits non-zero with a Typer-style error (Error Handling).
 """
 
@@ -20,7 +20,7 @@ from importlib.metadata import version as pkg_version
 
 from typer.testing import CliRunner
 
-from amc.cli.app import app
+from amg.cli.app import app
 
 runner = CliRunner()
 
@@ -43,7 +43,7 @@ def test_service_help_lists_every_subcommand() -> None:
 
 
 def test_version_prints_package_version() -> None:
-    expected = pkg_version("amc")
+    expected = pkg_version("amg")
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0, result.output
     assert expected in result.output

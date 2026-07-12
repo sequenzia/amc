@@ -2,12 +2,12 @@
 
 The adapter is the **single source of truth**, and its truth lives in one SQLite database. Every inbound and outbound message, every discovered channel and sender, every queued webhook, and every connector cursor is persisted there — there is no second store and no in-memory state that survives a restart.
 
-The persistence engine is **SQLite in WAL mode** with `PRAGMA foreign_keys = ON`. Table definitions are declared as **SQLAlchemy Core** `Table` objects in `amc/core/schema.py` (no ORM — the adapter is a small CRUD service with hand-written SQL paths). The runtime engine in `amc/core/db.py` consumes the same `metadata`. Schema changes ship as **Alembic** revisions under `amc/migrations/versions/` (currently `001_init` and `002_outbound_status`).
+The persistence engine is **SQLite in WAL mode** with `PRAGMA foreign_keys = ON`. Table definitions are declared as **SQLAlchemy Core** `Table` objects in `amg/core/schema.py` (no ORM — the adapter is a small CRUD service with hand-written SQL paths). The runtime engine in `amg/core/db.py` consumes the same `metadata`. Schema changes ship as **Alembic** revisions under `amg/migrations/versions/` (currently `001_init` and `002_outbound_status`).
 
 The original blueprint named **four** core tables — `messages`, `channels`, `senders`, `identity_links`. The implementation has **nine**: those four, joined by **five operational tables** (`message_reads`, `attachments`, `webhook_deliveries`, `idempotency_keys`, `connector_state`) that carry per-agent read state, re-hosted attachment metadata, the webhook fan-out queue, the send idempotency cache, and per-platform cursors. This page documents the real, current schema.
 
 !!! info "Where the shapes come from"
-    The columns below mirror `amc/core/schema.py` exactly, including its `CHECK` constraints and indexes. If you are looking for the JSON *wire* shape of a message rather than its row layout, see the [Message Envelope](message-envelope.md).
+    The columns below mirror `amg/core/schema.py` exactly, including its `CHECK` constraints and indexes. If you are looking for the JSON *wire* shape of a message rather than its row layout, see the [Message Envelope](message-envelope.md).
 
 ## Entity relationships
 
@@ -72,7 +72,7 @@ erDiagram
 
 ## The single write path
 
-Every row in `messages`, together with its `channels` / `senders` upserts, its `attachments` rows, the connector cursor advance, and the optional `webhook_deliveries` enqueue, is written by **one chokepoint**: the `MessageSink` in `amc/core/message_sink.py`. Connectors and the send route all call `sink.record_inbound(...)` / the outbound equivalent, and the sink performs the whole set of writes in a **single transaction**. Nothing else inserts into `messages` directly.
+Every row in `messages`, together with its `channels` / `senders` upserts, its `attachments` rows, the connector cursor advance, and the optional `webhook_deliveries` enqueue, is written by **one chokepoint**: the `MessageSink` in `amg/core/message_sink.py`. Connectors and the send route all call `sink.record_inbound(...)` / the outbound equivalent, and the sink performs the whole set of writes in a **single transaction**. Nothing else inserts into `messages` directly.
 
 This is why the schema can rely on referential integrity without elaborate retry logic: a message and the channel/sender it references either land together or not at all. See the [Architecture overview](index.md) for how the sink sits inside the adapter lifespan.
 
@@ -196,10 +196,10 @@ PRAGMA foreign_keys = ON;
 
 ### Database location
 
-By default the database is `state.db` under `~/Library/Application Support/messaging-agent/`. The path is overridable with `AMC_DB_PATH`; see [Configuration](../reference/configuration.md).
+By default the database is `state.db` under `~/Library/Application Support/messaging-agent/`. The path is overridable with `AMG_DB_PATH`; see [Configuration](../reference/configuration.md).
 
-!!! info "`state.db` vs `amc.db`"
-    Some operator docs and the spec refer to the database file as `amc.db`. That is a tracked spec↔code divergence — **the code default is `state.db`.** When in doubt, trust `AMC_DB_PATH` (or the default `state.db`) over any doc that says `amc.db`.
+!!! info "`state.db` vs `amg.db`"
+    Some operator docs and the spec refer to the database file as `amg.db`. That is a tracked spec↔code divergence — **the code default is `state.db`.** When in doubt, trust `AMG_DB_PATH` (or the default `state.db`) over any doc that says `amg.db`.
 
 ## Inspecting the database
 
@@ -231,7 +231,7 @@ SELECT source, cursor, updated_at FROM connector_state;
 ## See also
 
 - [Message Envelope](message-envelope.md) — the normalized wire shape that `messages` rows serialize to.
-- [Configuration](../reference/configuration.md) — `AMC_DB_PATH` and related settings.
+- [Configuration](../reference/configuration.md) — `AMG_DB_PATH` and related settings.
 - [Architecture overview](index.md) — where the `MessageSink` write path sits in the adapter lifespan.
 - [Runbook](../operations/runbook.md) — DB diagnostic queries and recovery procedures.
 - [Connectors overview](../connectors/index.md) — what produces the rows in `messages`, `channels`, and `senders`.

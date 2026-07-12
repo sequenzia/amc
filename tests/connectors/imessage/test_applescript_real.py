@@ -11,7 +11,7 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Callable
 
-from amc.connectors.imessage.applescript import (
+from amg.connectors.imessage.applescript import (
     DEFAULT_BACKOFF,
     AppleScriptSender,
     OsascriptAppleScriptSender,

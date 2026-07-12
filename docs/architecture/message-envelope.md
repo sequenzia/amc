@@ -1,11 +1,11 @@
 # Message Envelope
 
-The **normalized message envelope** is the central contract of AMC. Every message in the system — inbound or outbound, iMessage or Discord — conforms to this one JSON shape.
+The **normalized message envelope** is the central contract of AMG. Every message in the system — inbound or outbound, iMessage or Discord — conforms to this one JSON shape.
 
 This is what makes the layering work. A connector's only job is to translate a platform-native payload into (and out of) this envelope. Adding a new platform means writing one connector that emits this shape; the storage layer, the HTTP API, the MCP wrapper, and the agent never change. See the [Architecture overview](index.md) for how the layers fit together and the [Connectors overview](../connectors/index.md) for the translation seam.
 
 !!! info "Where the models live"
-    The canonical Pydantic v2 models are defined in `amc/core/envelope.py`. The HTTP API and MCP wrapper serialize `Envelope` instances out; connectors construct them on the way in.
+    The canonical Pydantic v2 models are defined in `amg/core/envelope.py`. The HTTP API and MCP wrapper serialize `Envelope` instances out; connectors construct them on the way in.
 
 ## Annotated example
 
@@ -63,7 +63,7 @@ This is what makes the layering work. A connector's only job is to translate a p
 
 ## Enumerations
 
-All four enums are `enum.StrEnum` in `amc/core/envelope.py`, so they serialize as their string value on the wire.
+All four enums are `enum.StrEnum` in `amg/core/envelope.py`, so they serialize as their string value on the wire.
 
 | Enum | Values | Meaning |
 | --- | --- | --- |
@@ -125,7 +125,7 @@ Every adapter-emitted `timestamp` is **RFC 3339 UTC with millisecond precision a
 ```
 
 !!! note "Implementation detail"
-    Pydantic v2 does not canonicalize the timezone on validate, so a tz-aware UTC `datetime` would normally serialize with a `+00:00` offset. AMC produces the `Z` form explicitly with a `@field_serializer`:
+    Pydantic v2 does not canonicalize the timezone on validate, so a tz-aware UTC `datetime` would normally serialize with a `+00:00` offset. AMG produces the `Z` form explicitly with a `@field_serializer`:
 
     ```python
     value.isoformat().replace("+00:00", "Z")

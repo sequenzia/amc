@@ -1,8 +1,8 @@
 """Static validation of the committed launchd plist (spec §9.4).
 
-The plist at ``ops/launchd/com.user.amc-adapter.plist`` is a *template* containing
-two placeholders rendered at install time by ``amc install`` (see
-``amc/cli/plist.py``):
+The plist at ``ops/launchd/com.user.amg-adapter.plist`` is a *template* containing
+two placeholders rendered at install time by ``amg install`` (see
+``amg/cli/plist.py``):
 
 - ``__INSTALL_DIR__`` — absolute path to the repo checkout
 - ``__HOME__`` — operator's ``$HOME`` (used to anchor log paths under
@@ -14,7 +14,7 @@ These tests:
    known test values). Skipped when ``plutil`` is unavailable (e.g. Linux CI).
 2. Parse the rendered plist with stdlib :mod:`plistlib` and assert the keys
    required by spec §9.4 are present.
-3. Assert ``Label`` matches ``com.user.amc-adapter``.
+3. Assert ``Label`` matches ``com.user.amg-adapter``.
 4. Assert log paths resolve under ``~/Library/Logs/messaging-agent/`` once
    ``__HOME__`` is expanded.
 
@@ -34,10 +34,10 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-PLIST_PATH = REPO_ROOT / "ops" / "launchd" / "com.user.amc-adapter.plist"
+PLIST_PATH = REPO_ROOT / "ops" / "launchd" / "com.user.amg-adapter.plist"
 
 # Placeholder substitutions for rendering the template into a valid plist.
-TEST_INSTALL_DIR = "/opt/amc"
+TEST_INSTALL_DIR = "/opt/amg"
 TEST_HOME = "/Users/testuser"
 
 REQUIRED_KEYS = {
@@ -49,7 +49,7 @@ REQUIRED_KEYS = {
     "StandardErrorPath",
 }
 
-EXPECTED_LABEL = "com.user.amc-adapter"
+EXPECTED_LABEL = "com.user.amg-adapter"
 EXPECTED_LOG_DIR_SUFFIX = "Library/Logs/messaging-agent"
 
 
@@ -66,7 +66,7 @@ def rendered_plist_bytes() -> bytes:
 
 @pytest.fixture(scope="module")
 def rendered_plist_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
-    path = tmp_path_factory.mktemp("launchd") / "com.user.amc-adapter.plist"
+    path = tmp_path_factory.mktemp("launchd") / "com.user.amg-adapter.plist"
     raw = PLIST_PATH.read_text(encoding="utf-8")
     path.write_text(_render_template(raw), encoding="utf-8")
     return path
@@ -115,7 +115,7 @@ def test_required_keys_present(rendered_plist_bytes: bytes) -> None:
 
 
 def test_label_matches_spec(rendered_plist_bytes: bytes) -> None:
-    """``Label`` is the canonical ``com.user.amc-adapter``."""
+    """``Label`` is the canonical ``com.user.amg-adapter``."""
     plist = plistlib.loads(rendered_plist_bytes)
     assert plist["Label"] == EXPECTED_LABEL
 

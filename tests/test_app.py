@@ -1,4 +1,4 @@
-"""Integration tests for the top-level adapter app (``amc.app``).
+"""Integration tests for the top-level adapter app (``amg.app``).
 
 Spec references:
 * §6.2 Authentication — every endpoint, including the schema and Swagger
@@ -22,8 +22,8 @@ from collections.abc import Iterator
 import pytest
 from fastapi.testclient import TestClient
 
-from amc.app import APP_TITLE, APP_VERSION, build_app
-from amc.core.auth import configure_bearer_token, reset_bearer_token
+from amg.app import APP_TITLE, APP_VERSION, build_app
+from amg.core.auth import configure_bearer_token, reset_bearer_token
 
 VALID_TOKEN = "tok-test-app-deadbeefdeadbeefdeadbeef"
 BAD_TOKEN = "tok-test-app-not-the-real-token"
@@ -132,7 +132,7 @@ def test_redoc_loads_with_bearer(client: TestClient) -> None:
 
 
 # (path, method) pairs that must appear in /openapi.json. Matches the
-# routers mounted by ``amc.app.build_app``. The schema/UI routes are
+# routers mounted by ``amg.app.build_app``. The schema/UI routes are
 # intentionally absent because they're registered with
 # ``include_in_schema=False``.
 _EXPECTED_ENDPOINTS: list[tuple[str, str]] = [

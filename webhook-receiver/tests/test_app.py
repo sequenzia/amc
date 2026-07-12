@@ -12,8 +12,8 @@ import httpx
 import pytest
 import pytest_asyncio
 
-from amc_receiver.app import build_app
-from amc_receiver.auth import compute_signature
+from amg_receiver.app import build_app
+from amg_receiver.auth import compute_signature
 from tests.fakes.fake_claude import make_fake_claude
 
 SECRET = "shared-secret-1234567890"  # noqa: S105 — test fixture
@@ -44,10 +44,10 @@ def _envelope(
 def _signed_request_kwargs(body_bytes: bytes, *, delivery_id: str = "dlv_1") -> dict[str, Any]:
     return {
         "headers": {
-            "X-AMC-Signature": compute_signature(SECRET, body_bytes),
-            "X-AMC-Delivery-Id": delivery_id,
-            "X-AMC-Message-Id": DEFAULT_MSG_ID,
-            "X-AMC-Attempt": "1",
+            "X-AMG-Signature": compute_signature(SECRET, body_bytes),
+            "X-AMG-Delivery-Id": delivery_id,
+            "X-AMG-Message-Id": DEFAULT_MSG_ID,
+            "X-AMG-Attempt": "1",
             "Content-Type": "application/json",
         },
         "content": body_bytes,
@@ -66,13 +66,13 @@ def configured_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     fake_claude = make_fake_claude(tmp_path, fake_claude_log)
-    monkeypatch.setenv("AMC_WEBHOOK_SECRET", SECRET)
-    monkeypatch.setenv("AMC_BEARER_TOKEN", BEARER)
-    monkeypatch.setenv("AMC_AGENT_ID", "test-agent")
-    monkeypatch.setenv("AMC_RECEIVER_CLAUDE_BIN", str(fake_claude))
-    monkeypatch.setenv("AMC_RECEIVER_LOG_DIR", str(tmp_path / "logs"))
-    monkeypatch.setenv("AMC_RECEIVER_IDLE_WORKER_TTL_SECONDS", "5")
-    monkeypatch.setenv("AMC_RECEIVER_CLAUDE_TIMEOUT_SECONDS", "15")
+    monkeypatch.setenv("AMG_WEBHOOK_SECRET", SECRET)
+    monkeypatch.setenv("AMG_BEARER_TOKEN", BEARER)
+    monkeypatch.setenv("AMG_AGENT_ID", "test-agent")
+    monkeypatch.setenv("AMG_RECEIVER_CLAUDE_BIN", str(fake_claude))
+    monkeypatch.setenv("AMG_RECEIVER_LOG_DIR", str(tmp_path / "logs"))
+    monkeypatch.setenv("AMG_RECEIVER_IDLE_WORKER_TTL_SECONDS", "5")
+    monkeypatch.setenv("AMG_RECEIVER_CLAUDE_TIMEOUT_SECONDS", "15")
 
 
 @pytest_asyncio.fixture
@@ -119,18 +119,18 @@ async def test_webhook_happy_path_invokes_claude(
     assert "-p" in inv["argv"]
     assert "--allowedTools" in inv["argv"]
     for tool in (
-        "mcp__amc__list_unread_messages",
-        "mcp__amc__send_message",
-        "mcp__amc__mark_read",
-        "mcp__amc__get_message_context",
+        "mcp__amg__list_unread_messages",
+        "mcp__amg__send_message",
+        "mcp__amg__mark_read",
+        "mcp__amg__get_message_context",
     ):
         assert tool in inv["argv"]
 
     assert "--mcp-config" in inv["argv"]
     mcp_idx = inv["argv"].index("--mcp-config")
     mcp_blob = json.loads(inv["argv"][mcp_idx + 1])
-    assert "amc" in mcp_blob["mcpServers"]
-    assert mcp_blob["mcpServers"]["amc"]["env"]["AMC_BEARER_TOKEN"] == BEARER
+    assert "amg" in mcp_blob["mcpServers"]
+    assert mcp_blob["mcpServers"]["amg"]["env"]["AMG_BEARER_TOKEN"] == BEARER
 
     # Stdin should contain the rendered envelope.
     assert DEFAULT_MSG_ID in inv["stdin"]
@@ -164,7 +164,7 @@ async def test_webhook_invocation_env_is_clean(
 async def test_webhook_rejects_invalid_signature(client: httpx.AsyncClient) -> None:
     body = json.dumps(_envelope()).encode("utf-8")
     kwargs = _signed_request_kwargs(body)
-    kwargs["headers"]["X-AMC-Signature"] = "sha256=" + "0" * 64
+    kwargs["headers"]["X-AMG-Signature"] = "sha256=" + "0" * 64
     resp = await client.post("/webhook", **kwargs)
     assert resp.status_code == 401
 
@@ -204,7 +204,7 @@ async def test_webhook_rejects_envelope_missing_channel_id(
 async def test_webhook_rejects_missing_delivery_id(client: httpx.AsyncClient) -> None:
     body = json.dumps(_envelope()).encode("utf-8")
     kwargs = _signed_request_kwargs(body)
-    del kwargs["headers"]["X-AMC-Delivery-Id"]
+    del kwargs["headers"]["X-AMG-Delivery-Id"]
     resp = await client.post("/webhook", **kwargs)
     assert resp.status_code == 400
 

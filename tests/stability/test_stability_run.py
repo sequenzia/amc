@@ -1,6 +1,6 @@
 """Bounded automated stability run (task #73; spec §3.2 / §6.1).
 
-This is the v1 build-acceptance gate. The test boots the full AMC stack
+This is the v1 build-acceptance gate. The test boots the full AMG stack
 against the Phase 0 fakes, drives mixed Discord + iMessage inbound load
 for a configurable window, polls /messages/unread + /messages/mark_read
 from 5 in-process agents in parallel, and asserts the spec's stability
@@ -17,11 +17,11 @@ CI duration default
 -------------------
 The default duration is **60 SECONDS** so the test fits inside a normal
 CI run. The spec's 30-minute window is the operator-run gate, not the
-CI gate. A maintainer can override via the ``AMC_STABILITY_DURATION_SECONDS``
+CI gate. A maintainer can override via the ``AMG_STABILITY_DURATION_SECONDS``
 env var (capped at 3600s).
 
 Operator override:
-    AMC_STABILITY_DURATION_SECONDS=1800 uv run pytest \\
+    AMG_STABILITY_DURATION_SECONDS=1800 uv run pytest \\
         tests/stability/test_stability_run.py -v --override-ini=addopts=
 
 The test writes a ``stability-metrics.json`` file under ``tmp_path`` and
@@ -69,22 +69,22 @@ WEBHOOK_FIRST_ATTEMPT_SUCCESS_FLOOR: float = 0.95
 
 
 def _resolve_duration() -> float:
-    """Return the CI duration, honoring ``AMC_STABILITY_DURATION_SECONDS``.
+    """Return the CI duration, honoring ``AMG_STABILITY_DURATION_SECONDS``.
 
     Caps the value at :data:`DURATION_CEILING_SECONDS` so an env override
     can't blow past the 1-hour ad-hoc ceiling from the task brief.
     """
-    raw = os.environ.get("AMC_STABILITY_DURATION_SECONDS", "").strip()
+    raw = os.environ.get("AMG_STABILITY_DURATION_SECONDS", "").strip()
     if not raw:
         return DEFAULT_DURATION_SECONDS
     try:
         value = float(raw)
     except ValueError as exc:
         raise pytest.UsageError(
-            f"AMC_STABILITY_DURATION_SECONDS must be numeric; got {raw!r}"
+            f"AMG_STABILITY_DURATION_SECONDS must be numeric; got {raw!r}"
         ) from exc
     if value <= 0:
-        raise pytest.UsageError(f"AMC_STABILITY_DURATION_SECONDS must be > 0; got {value}")
+        raise pytest.UsageError(f"AMG_STABILITY_DURATION_SECONDS must be > 0; got {value}")
     return min(value, float(DURATION_CEILING_SECONDS))
 
 
@@ -98,7 +98,7 @@ async def test_bounded_stability_run_meets_slos(tmp_path: Path) -> None:
 
     Walks the full lifecycle:
 
-    1. Materialize a writable chat.db copy + a fresh AMC SQLite DB.
+    1. Materialize a writable chat.db copy + a fresh AMG SQLite DB.
     2. Boot FakeDiscordGateway, in-process webhook receiver (with 5%
        500 flake), real Discord+iMessage connectors, real WebhookWorker,
        FastAPI app via TestClient.

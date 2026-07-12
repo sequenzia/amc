@@ -25,10 +25,10 @@ The MCP wrapper ships **stdio-only** in v1. The HTTP MCP transport is explicitly
 
 Concrete consequences:
 
-- The wrapper is published as a Python console script (`amc-mcp`) that reads/writes MCP frames on stdin/stdout (the default for `mcp` Python SDK stdio servers).
+- The wrapper is published as a Python console script (`amg-mcp`) that reads/writes MCP frames on stdin/stdout (the default for `mcp` Python SDK stdio servers).
 - Agent runtimes spawn one wrapper process per session. Process lifetime is bound to the session; no daemon mode.
 - The wrapper validates Phase-3 acceptance via an automated `mcp.client.stdio` **client** harness that spawns the wrapper as a subprocess and round-trips every tool against the adapter — no real MCP host, no MCP Inspector, and no human-driven verification (see ADR 0007 and spec §9.3).
-- Configuration (`AMC_BASE_URL`, bearer token, `X-Agent-ID` to send on calls) is injected via env vars at spawn time, in keeping with how MCP hosts already configure stdio servers.
+- Configuration (`AMG_BASE_URL`, bearer token, `X-Agent-ID` to send on calls) is injected via env vars at spawn time, in keeping with how MCP hosts already configure stdio servers.
 - The HTTP transport, if/when added post-v1, will be additive: same four tools, same JSON shapes, just a different transport. Spec §15 lists this under future work.
 
 ## Consequences
@@ -51,7 +51,7 @@ Concrete consequences:
 ### Neutral
 
 - The four-tool surface (§6.1) is transport-agnostic. Adding HTTP later requires no API changes.
-- The adapter's REST endpoints already serve non-MCP consumers, so "I want to use AMC from a Python script" is solved without ever touching MCP.
+- The adapter's REST endpoints already serve non-MCP consumers, so "I want to use AMG from a Python script" is solved without ever touching MCP.
 
 ## Alternatives considered
 
@@ -64,7 +64,7 @@ Concrete consequences:
 - Blueprint §6 — MCP Wrapper
 - Blueprint §7 — Deployment on a Single Mac
 - Blueprint §7.2 — Future Work: HTTP MCP transport
-- Spec §5.6 / REQ-AMC-006 — MCP wrapper exposing the four tools
+- Spec §5.6 / REQ-AMG-006 — MCP wrapper exposing the four tools
 - Spec §8.1 / §8.2 — Out-of-scope: HTTP MCP transport for v1
 - Spec §9.3 — Phase 3 automated SDK-client harness for acceptance
 - ADR 0007 — Autonomous build acceptance (stdio-only is what makes the SDK-client harness sufficient)

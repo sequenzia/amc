@@ -1,6 +1,6 @@
 # MCP Tools
 
-Cross-reference: spec §7.4.7. The MCP wrapper (`mcp/src/amc_mcp/tools/*.py`)
+Cross-reference: spec §7.4.7. The MCP wrapper (`mcp/src/amg_mcp/tools/*.py`)
 exposes exactly four tools that map 1:1 to the [REST endpoints](rest-api.md).
 Each tool is a self-contained module that registers a `@mcp.tool()` handler with
 a Pydantic input schema; none contain platform-specific code (no Discord /
@@ -8,7 +8,7 @@ AppleScript / chat.db imports). Input is validated by Pydantic at the framework
 boundary; unit tests exercise the same handlers directly with a fake HTTP client.
 
 The wrapper injects the bearer token and `X-Agent-ID` headers from
-`AMC_BEARER_TOKEN` / `AMC_AGENT_ID` env vars, and generates a fresh UUIDv4
+`AMG_BEARER_TOKEN` / `AMG_AGENT_ID` env vars, and generates a fresh UUIDv4
 `Idempotency-Key` for `send_message`. Errors are returned as the spec
 §7.4.12 envelope verbatim.
 

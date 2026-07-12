@@ -1,23 +1,23 @@
 # Lifespan wiring — handoff & next steps
 
 **Date:** 2026-05-09
-**Context:** `amc/app.py` lifespan now boots the bearer token, DB, allowlist, message sink, webhook worker, sweepers, and (gated) connectors. This document covers what's left for the operator and which test failures predate this work but should be tracked.
+**Context:** `amg/app.py` lifespan now boots the bearer token, DB, allowlist, message sink, webhook worker, sweepers, and (gated) connectors. This document covers what's left for the operator and which test failures predate this work but should be tracked.
 
 ---
 
 ## What was wired
 
-Lifespan in `amc/app.py` now performs (in order):
+Lifespan in `amg/app.py` now performs (in order):
 
 0. **Hydrate `os.environ` from `~/.config/messaging-agent/.env`** (process env wins on conflict). Without this step, only `load_bearer_token()` could see `.env` values; everything else only reads `os.environ`.
-1. `load_bearer_token()` — reads `AMC_BEARER_TOKEN` from `~/.config/messaging-agent/.env` or process env.
-2. `load_allowlist()` — reads `AMC_ALLOWLIST_PATH` (default `~/.config/messaging-agent/allowlist.toml`).
-3. `load_webhook_config_from_env()` — webhook config (None when `AMC_WEBHOOK_URL` is unset).
+1. `load_bearer_token()` — reads `AMG_BEARER_TOKEN` from `~/.config/messaging-agent/.env` or process env.
+2. `load_allowlist()` — reads `AMG_ALLOWLIST_PATH` (default `~/.config/messaging-agent/allowlist.toml`).
+3. `load_webhook_config_from_env()` — webhook config (None when `AMG_WEBHOOK_URL` is unset).
 4. `create_engine_from_env()` + `create_session_factory()` — SQLite engine on `app.state.engine` / `app.state.session_factory`.
 5. `WebhookWorker` constructed first so its `url_snapshot` can be shared with…
 6. `MessageSink` — single chokepoint, on `app.state.sink`.
-7. `AttachmentStore` (with `bind_url` from `AMC_BIND_HOST`/`AMC_BIND_PORT`), `RateLimiter.from_env()`, `IdempotencyStore`, `IdempotencySweeper`, `AttachmentSweeper`.
-8. **Discord connector** — only when `AMC_DISCORD_BOT_TOKEN` is set; registered with `healthz.register_connector("discord", ...)`.
+7. `AttachmentStore` (with `bind_url` from `AMG_BIND_HOST`/`AMG_BIND_PORT`), `RateLimiter.from_env()`, `IdempotencyStore`, `IdempotencySweeper`, `AttachmentSweeper`.
+8. **Discord connector** — only when `AMG_DISCORD_BOT_TOKEN` is set; registered with `healthz.register_connector("discord", ...)`.
 9. **iMessage connector** — only when `sys.platform == "darwin"` and `~/Library/Messages/chat.db` exists; registered the same way.
 10. Wires every route-level singleton via `configure_session_factory` / `configure_rate_limiter` / `configure_idempotency_store` / `configure_discord_connector` / `configure_imessage_connector`.
 11. Starts: webhook worker, idempotency sweeper, attachment sweeper.
@@ -33,12 +33,12 @@ Lifespan in `amc/app.py` now performs (in order):
 
 1. Put the bot token in `~/.config/messaging-agent/.env` (mode 0600):
    ```
-   AMC_DISCORD_BOT_TOKEN=...
+   AMG_DISCORD_BOT_TOKEN=...
    ```
-2. Restart `uvicorn amc.app:app`.
+2. Restart `uvicorn amg.app:app`.
 3. Verify:
    ```bash
-   curl -s -H "Authorization: Bearer $AMC_BEARER_TOKEN" \
+   curl -s -H "Authorization: Bearer $AMG_BEARER_TOKEN" \
      http://127.0.0.1:8080/healthz | python3 -m json.tool
    ```
    `connectors.discord.state` should be `"ok"`. If it's `"degraded"`, the bot token was rejected — see RUNBOOK §"Discord auth".
@@ -53,15 +53,15 @@ Lifespan in `amc/app.py` now performs (in order):
 ### To enable webhook delivery
 
 ```
-AMC_WEBHOOK_URL=https://your-receiver.example/hooks/amc
-AMC_WEBHOOK_SECRET=<generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`>
+AMG_WEBHOOK_URL=https://your-receiver.example/hooks/amg
+AMG_WEBHOOK_SECRET=<generate with `python -c "import secrets; print(secrets.token_urlsafe(32))"`>
 ```
 
 Then restart. Worker logs `webhook_worker_started` on boot. Inspect `webhook_deliveries` table for queue state, or read `webhook_queue.pending`/`webhook_queue.dead` from `/healthz`.
 
 ### Operational prerequisites (one-time)
 
-- Run migrations: `uv run alembic upgrade head` — but **make sure `AMC_DB_PATH` is consistent**. The spec/`.env.example` default is `amc.db`; the code-level default in `amc/core/db.py:54-56` is `state.db`. Migrate the file your `.env` points at, not the code default. (Tracked divergence: `internal/notes/spec-code-divergences.md`.)
+- Run migrations: `uv run alembic upgrade head` — but **make sure `AMG_DB_PATH` is consistent**. The spec/`.env.example` default is `amg.db`; the code-level default in `amg/core/db.py:54-56` is `state.db`. Migrate the file your `.env` points at, not the code default. (Tracked divergence: `internal/notes/spec-code-divergences.md`.)
 - Seed `~/.config/messaging-agent/allowlist.toml` with at least one `[[entry]]` block per allowed sender (see `internal/adrs/0005-allowlist-toml.md`).
 
 ### Recommended verification flow
@@ -94,7 +94,7 @@ Verified passing on 2026-05-09. Likely a transient state from the prior session.
 
 ### 4. `tests/core/test_allowlist.py::test_load_allowlist_falls_back_to_default` (FIXED)
 
-The test relied on `~/.config/messaging-agent/allowlist.toml` being absent on the host — true on CI, false on any dev machine where AMC is configured. Fix: `monkeypatch.setattr("amc.core.allowlist.DEFAULT_ALLOWLIST_PATH", tmp_path / "no-such-allowlist.toml")` so the fallback path is guaranteed missing regardless of host state.
+The test relied on `~/.config/messaging-agent/allowlist.toml` being absent on the host — true on CI, false on any dev machine where AMG is configured. Fix: `monkeypatch.setattr("amg.core.allowlist.DEFAULT_ALLOWLIST_PATH", tmp_path / "no-such-allowlist.toml")` so the fallback path is guaranteed missing regardless of host state.
 
 ### 5. `pytest.mark.slow` unknown-marker warning (FIXED)
 
@@ -105,7 +105,7 @@ Registered `slow` in `pyproject.toml [tool.pytest.ini_options].markers`. Single 
 ## Files changed in this session
 
 ```
-M  amc/app.py                                     — full lifespan wiring + bootstrap=True kwarg
+M  amg/app.py                                     — full lifespan wiring + bootstrap=True kwarg
 M  tests/api/golden/openapi.json                  — regenerated to include /healthz
 M  tests/e2e/test_discord_roundtrip.py            — build_app(bootstrap=False)
 M  tests/e2e/test_webhook_retry.py                — build_app(bootstrap=False)

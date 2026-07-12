@@ -25,7 +25,7 @@ The adapter is implemented in **Python 3.12+ with FastAPI**, packaged with `uv`,
 
 Concrete consequences of this choice already locked in by Phase 1:
 
-- Top-level `amc/` package layout (not `src/amc/`), with the `uv_build` backend.
+- Top-level `amg/` package layout (not `src/amg/`), with the `uv_build` backend.
 - `tomllib` (stdlib, 3.12+) for parsing the allowlist file (see ADR 0005).
 - `aiosqlite` + `sqlalchemy[asyncio]` for the writable adapter DB; `sqlite3` (stdlib) in `to_thread` for the read-only `chat.db` path.
 - `discord.py` (PyPI: `discord-py`, imports as `discord`) for the Gateway and REST client.

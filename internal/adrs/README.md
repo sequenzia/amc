@@ -1,6 +1,6 @@
 # Architecture Decision Records
 
-This directory holds the Architecture Decision Records (ADRs) for the Agent Messaging Channel (AMC). Each ADR captures a single architectural decision in the **Context / Decision / Consequences** format.
+This directory holds the Architecture Decision Records (ADRs) for the Agent Messaging Gateway (AMG). Each ADR captures a single architectural decision in the **Context / Decision / Consequences** format.
 
 ADRs are immutable once accepted. If a decision is reversed, add a new ADR that supersedes the old one and update the `Status` line on the superseded record.
 
@@ -31,6 +31,6 @@ Each ADR follows the same structure:
 
 ## Cross-references
 
-- Source-of-truth blueprint: [`internal/blueprints/agent-messaging-channel.md`](../blueprints/agent-messaging-channel.md)
-- Detailed specification: [`specs/agent-messaging-channel-SPEC.md`](../../specs/agent-messaging-channel-SPEC.md)
+- Source-of-truth blueprint: [`internal/blueprints/agent-messaging-gateway.md`](../blueprints/agent-messaging-gateway.md)
+- Detailed specification: [`specs/agent-messaging-gateway-SPEC.md`](../../specs/agent-messaging-gateway-SPEC.md)
 - Resolved open questions: [`internal/notes/`](../notes/)

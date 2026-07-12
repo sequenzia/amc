@@ -86,7 +86,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_discord_connector,
     configure_imessage_connector,
     configure_rate_limiter,
@@ -97,18 +97,18 @@ from amc.api.messages_send import (
     reset_session_factory,
     router,
 )
-from amc.connectors.discord.connector import AmcDiscordErrorCode, SendResult
-from amc.connectors.imessage.applescript import SendResult as ImessageSendResult
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.errors import register_exception_handlers
-from amc.core.idempotency import (
+from amg.connectors.discord.connector import AmgDiscordErrorCode, SendResult
+from amg.connectors.imessage.applescript import SendResult as ImessageSendResult
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.errors import register_exception_handlers
+from amg.core.idempotency import (
     IdempotencyStore,
     configure_idempotency_store,
     register_idempotency_handlers,
     reset_idempotency_store,
 )
-from amc.core.rate_limit import RateLimiter
+from amg.core.rate_limit import RateLimiter
 from tests.fakes.applescript import FakeAppleScriptSender
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -206,7 +206,7 @@ class FakeImessageConnector:
 def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     path = tmp_path / "send.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(path))
+    monkeypatch.setenv("AMG_DB_PATH", str(path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     return path
@@ -620,7 +620,7 @@ class TestFunctionalImessage:
         db_path: Path,
     ) -> None:
         """When the iMessage connector is intentionally disabled."""
-        from amc.api.messages_send import reset_imessage_connector as _reset
+        from amg.api.messages_send import reset_imessage_connector as _reset
 
         _reset()
         _seed_channel(db_path, source="imessage", channel_id=IMESSAGE_CHANNEL)
@@ -854,7 +854,7 @@ class TestDiscordErrorMapping:
         discord_connector.script(
             SendResult(
                 ok=False,
-                error=AmcDiscordErrorCode.PLATFORM_AUTH.value,
+                error=AmgDiscordErrorCode.PLATFORM_AUTH.value,
                 detail="403 Forbidden",
             )
         )
@@ -877,7 +877,7 @@ class TestDiscordErrorMapping:
         discord_connector.script(
             SendResult(
                 ok=False,
-                error=AmcDiscordErrorCode.PLATFORM_SEND_FAILED.value,
+                error=AmgDiscordErrorCode.PLATFORM_SEND_FAILED.value,
                 detail="503 Service Unavailable",
             )
         )
@@ -899,7 +899,7 @@ class TestDiscordErrorMapping:
         discord_connector.script(
             SendResult(
                 ok=False,
-                error=AmcDiscordErrorCode.PLATFORM_SEND_FAILED.value,
+                error=AmgDiscordErrorCode.PLATFORM_SEND_FAILED.value,
                 detail="500",
             )
         )
@@ -1082,7 +1082,7 @@ class TestAuthAndValidation:
         """
         from pydantic import ValidationError
 
-        from amc.core.envelope import SendMessageRequest
+        from amg.core.envelope import SendMessageRequest
 
         with pytest.raises(ValidationError):
             SendMessageRequest(channel_id=DISCORD_CHANNEL, text="")

@@ -1,15 +1,15 @@
 # REST API Reference
 
 Cross-reference: this document expands the contract defined in
-[`specs/agent-messaging-channel-SPEC.md` §7.4](https://github.com/sequenzia/amc/blob/main/specs/agent-messaging-channel-SPEC.md#74-api-specifications)
+[`specs/agent-messaging-gateway-SPEC.md` §7.4](https://github.com/sequenzia/amg/blob/main/specs/agent-messaging-gateway-SPEC.md#74-api-specifications)
 ("API Specifications"). It is regenerated from the FastAPI app's OpenAPI schema
-(`amc.app.app.openapi()`). The parallel MCP surface is documented separately in
+(`amg.app.app.openapi()`). The parallel MCP surface is documented separately in
 [MCP Tools](mcp-tools.md).
 
 The adapter exposes two parallel surfaces:
 
-1. **REST** — `amc.app:app`, an HTTP API bound to `127.0.0.1:8080` by default
-   (configurable via `AMC_BIND_HOST` / `AMC_BIND_PORT`). Every route is gated
+1. **REST** — `amg.app:app`, an HTTP API bound to `127.0.0.1:8080` by default
+   (configurable via `AMG_BIND_HOST` / `AMG_BIND_PORT`). Every route is gated
    by an `Authorization: Bearer <token>` header; per-agent read endpoints
    additionally require an `X-Agent-ID: <name>` header. Documented on this page.
 2. **MCP** — a thin Python wrapper (`mcp/`, FastMCP) that exposes four
@@ -26,13 +26,13 @@ The adapter exposes two parallel surfaces:
 All endpoints require:
 
 ```
-Authorization: Bearer ${AMC_BEARER_TOKEN}
+Authorization: Bearer ${AMG_BEARER_TOKEN}
 ```
 
 Read endpoints that filter by allowlist visibility additionally require:
 
 ```
-X-Agent-ID: ${AMC_AGENT_ID}
+X-Agent-ID: ${AMG_AGENT_ID}
 ```
 
 The header requirements per endpoint follow spec §7.4 (header table). Missing
@@ -59,7 +59,7 @@ Stable codes used across the surface:
 |------|--------|---------|
 | `UNAUTHORIZED` | 401 | Bearer header missing or token mismatch |
 | `AGENT_ID_REQUIRED` | 400 | `X-Agent-ID` header missing on a per-agent endpoint |
-| `VALIDATION_FAILED` | 400 / 422 | Body / query / path validation failed (spec uses `VALIDATION_ERROR`; the implementation emits `VALIDATION_FAILED` for the AMC-flavored cases) |
+| `VALIDATION_FAILED` | 400 / 422 | Body / query / path validation failed (spec uses `VALIDATION_ERROR`; the implementation emits `VALIDATION_FAILED` for the AMG-flavored cases) |
 | `IDEMPOTENCY_KEY_REUSE` | 422 | Same `Idempotency-Key` reused with a different body hash |
 | `RATE_LIMITED` | 429 | Per-channel token bucket exhausted (`Retry-After` header set) |
 | `MESSAGE_NOT_FOUND` | 404 | Message id unknown OR not visible (e.g. quarantined) |
@@ -92,9 +92,9 @@ RFC 3339 form parseable by `datetime.fromisoformat` (Python 3.11+: includes
 All examples below use these shell variables:
 
 ```bash
-export AMC_BASE_URL="http://127.0.0.1:8080"
-export AMC_BEARER_TOKEN="..."     # value from ~/.config/messaging-agent/.env
-export AMC_AGENT_ID="claude-code"
+export AMG_BASE_URL="http://127.0.0.1:8080"
+export AMG_BEARER_TOKEN="..."     # value from ~/.config/messaging-agent/.env
+export AMG_AGENT_ID="claude-code"
 ```
 
 ---
@@ -139,9 +139,9 @@ clients never have to handle a missing field.
 **Curl**:
 
 ```bash
-curl -sS "${AMC_BASE_URL}/messages/unread?limit=20&source=discord" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}" \
-  -H "X-Agent-ID: ${AMC_AGENT_ID}"
+curl -sS "${AMG_BASE_URL}/messages/unread?limit=20&source=discord" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}" \
+  -H "X-Agent-ID: ${AMG_AGENT_ID}"
 ```
 
 ---
@@ -171,9 +171,9 @@ cannot probe for their existence.
 **Curl**:
 
 ```bash
-curl -sS "${AMC_BASE_URL}/messages/msg_01HXYZABCDEFGHJKMNPQRSTVWX" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}" \
-  -H "X-Agent-ID: ${AMC_AGENT_ID}"
+curl -sS "${AMG_BASE_URL}/messages/msg_01HXYZABCDEFGHJKMNPQRSTVWX" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}" \
+  -H "X-Agent-ID: ${AMG_AGENT_ID}"
 ```
 
 ---
@@ -214,9 +214,9 @@ fall outside `[0, 50]`.
 
 ```bash
 curl -sS \
-  "${AMC_BASE_URL}/messages/context?channel_id=discord:dm:1234567890&around_message_id=msg_01HXYZABCDEFGHJKMNPQRSTVWX&before=5&after=5" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}" \
-  -H "X-Agent-ID: ${AMC_AGENT_ID}"
+  "${AMG_BASE_URL}/messages/context?channel_id=discord:dm:1234567890&around_message_id=msg_01HXYZABCDEFGHJKMNPQRSTVWX&before=5&after=5" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}" \
+  -H "X-Agent-ID: ${AMG_AGENT_ID}"
 ```
 
 ---
@@ -255,9 +255,9 @@ inserted rows.
 **Curl**:
 
 ```bash
-curl -sS -X POST "${AMC_BASE_URL}/messages/mark_read" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}" \
-  -H "X-Agent-ID: ${AMC_AGENT_ID}" \
+curl -sS -X POST "${AMG_BASE_URL}/messages/mark_read" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}" \
+  -H "X-Agent-ID: ${AMG_AGENT_ID}" \
   -H "Content-Type: application/json" \
   -d '{"message_ids": ["msg_01HXYZABCDEFGHJKMNPQRSTVWX"]}'
 ```
@@ -272,7 +272,7 @@ curl -sS -X POST "${AMC_BASE_URL}/messages/mark_read" \
 The route resolves `(source, channel_id)` against the `channels` table
 (404 if never observed inbound), acquires one token from the per-channel
 rate limiter, routes to Discord or iMessage based on the `discord:` prefix,
-persists an outbound row, and returns the AMC-side message id.
+persists an outbound row, and returns the AMG-side message id.
 
 **Auth**: Bearer required. `X-Agent-ID` is **not** required (sends are not
 allowlist-filtered). `Idempotency-Key` is recommended; the wrapper supplies
@@ -338,8 +338,8 @@ distinguishing header today). A different body hash returns
 **Curl**:
 
 ```bash
-curl -sS -X POST "${AMC_BASE_URL}/messages/send" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}" \
+curl -sS -X POST "${AMG_BASE_URL}/messages/send" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}" \
   -H "Idempotency-Key: $(uuidgen)" \
   -H "Content-Type: application/json" \
   -d '{
@@ -384,8 +384,8 @@ ergonomics.
 **Curl**:
 
 ```bash
-curl -sS "${AMC_BASE_URL}/messages/quarantine?limit=50" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}"
+curl -sS "${AMG_BASE_URL}/messages/quarantine?limit=50" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}"
 ```
 
 ---
@@ -395,7 +395,7 @@ curl -sS "${AMC_BASE_URL}/messages/quarantine?limit=50" \
 **Spec**: §7.4.9, §5.8.
 
 **Purpose**: Stream the bytes of a re-hosted attachment from the local
-store (`$AMC_ATTACHMENT_DIR/<id>`).
+store (`$AMG_ATTACHMENT_DIR/<id>`).
 
 **Auth**: Bearer required.
 
@@ -419,8 +419,8 @@ where `bytes_path IS NULL`, or file gone from disk), `401 UNAUTHORIZED`,
 **Curl**:
 
 ```bash
-curl -sS -OJ "${AMC_BASE_URL}/attachments/att_01HABCABCDEFGHJKMNPQRSTVWX" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}"
+curl -sS -OJ "${AMG_BASE_URL}/attachments/att_01HABCABCDEFGHJKMNPQRSTVWX" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}"
 ```
 
 ---
@@ -439,8 +439,8 @@ every endpoint.
 **Curl**:
 
 ```bash
-curl -sS "${AMC_BASE_URL}/openapi.json" \
-  -H "Authorization: Bearer ${AMC_BEARER_TOKEN}"
+curl -sS "${AMG_BASE_URL}/openapi.json" \
+  -H "Authorization: Bearer ${AMG_BEARER_TOKEN}"
 ```
 
 ---
@@ -448,7 +448,7 @@ curl -sS "${AMC_BASE_URL}/openapi.json" \
 ## 3. Schemas
 
 The reference shapes for the request/response bodies above. These are the
-Pydantic v2 models in `amc/core/envelope.py` and the request/response
+Pydantic v2 models in `amg/core/envelope.py` and the request/response
 models in the route modules.
 
 ### 3.1 Envelope (spec §7.3.1)
@@ -520,14 +520,14 @@ injects the bearer / `X-Agent-ID` headers and an `Idempotency-Key` for
 
 ## 5. Compatibility note
 
-The mounted REST surface in `amc.app:app` is the canonical authority. The eight
+The mounted REST surface in `amg.app:app` is the canonical authority. The eight
 routers wired by `build_app()` are the seven message/attachment routes above
 plus `GET /healthz` (§7.4.10), which reports liveness, per-connector state, and
 webhook-queue depth. `GET /openapi.json`, `/docs`, and `/redoc` are
 re-registered behind `Depends(require_bearer)`.
 
 One spec route is **not** yet mounted: `POST /typing` (§7.4.6). Its router
-exists (`amc/api/typing.py`) but `build_app()` does not include it; it is a
+exists (`amg/api/typing.py`) but `build_app()` does not include it; it is a
 best-effort typing indicator slated for a follow-on wave. Webhook outbound
 delivery (§7.4.11) is a server-to-client push, not a mounted route — it is
 documented in the spec and in [Operations → Webhook Receiver](../operations/webhook-receiver.md).

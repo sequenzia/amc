@@ -1,8 +1,8 @@
 #!/bin/bash
-# AMC nightly SQLite backup script.
+# AMG nightly SQLite backup script.
 #
-# Invoked by launchd via com.user.amc-backup.plist at 03:00 daily (spec §7.2,
-# §11). Produces a date-stamped copy of $AMC_DB_PATH using the SQLite Online
+# Invoked by launchd via com.user.amg-backup.plist at 03:00 daily (spec §7.2,
+# §11). Produces a date-stamped copy of $AMG_DB_PATH using the SQLite Online
 # Backup API, then prunes backups older than 7 days.
 #
 # WAL consistency strategy: uses `sqlite3 <source> ".backup <target>"`, which
@@ -14,8 +14,8 @@
 # running twice in the same calendar day overwrites the same target file.
 #
 # Environment:
-#   AMC_DB_PATH  — source SQLite file (default: ~/Library/Application Support/messaging-agent/state.db)
-#   AMC_LOG_DIR  — log destination     (default: ~/Library/Logs/messaging-agent)
+#   AMG_DB_PATH  — source SQLite file (default: ~/Library/Application Support/messaging-agent/state.db)
+#   AMG_LOG_DIR  — log destination     (default: ~/Library/Logs/messaging-agent)
 #
 # Exit codes:
 #   0  — backup succeeded (or, for retention, partial cleanup is non-fatal)
@@ -30,23 +30,23 @@ DEFAULT_DB="${HOME}/Library/Application Support/messaging-agent/state.db"
 DEFAULT_LOG_DIR="${HOME}/Library/Logs/messaging-agent"
 DEFAULT_BACKUP_DIR="${HOME}/Library/Application Support/messaging-agent/backups"
 
-AMC_DB_PATH="${AMC_DB_PATH:-${DEFAULT_DB}}"
-AMC_LOG_DIR="${AMC_LOG_DIR:-${DEFAULT_LOG_DIR}}"
+AMG_DB_PATH="${AMG_DB_PATH:-${DEFAULT_DB}}"
+AMG_LOG_DIR="${AMG_LOG_DIR:-${DEFAULT_LOG_DIR}}"
 # Backup destination is derived from the DB path's parent dir + "/backups"
-# unless overridden, so a test harness pointing AMC_DB_PATH at a tmp dir
+# unless overridden, so a test harness pointing AMG_DB_PATH at a tmp dir
 # automatically scopes its backups to that tmp dir.
-if [ -n "${AMC_BACKUP_DIR:-}" ]; then
-    BACKUP_DIR="${AMC_BACKUP_DIR}"
+if [ -n "${AMG_BACKUP_DIR:-}" ]; then
+    BACKUP_DIR="${AMG_BACKUP_DIR}"
 else
-    db_parent="$(dirname "${AMC_DB_PATH}")"
+    db_parent="$(dirname "${AMG_DB_PATH}")"
     BACKUP_DIR="${db_parent}/backups"
 fi
 
 RETENTION_DAYS=7
 
 # ---- logging ---------------------------------------------------------------
-mkdir -p "${AMC_LOG_DIR}" 2>/dev/null || true
-LOG_FILE="${AMC_LOG_DIR}/backup.log"
+mkdir -p "${AMG_LOG_DIR}" 2>/dev/null || true
+LOG_FILE="${AMG_LOG_DIR}/backup.log"
 
 log() {
     # ISO 8601 UTC timestamp + level + message; appended to backup.log and
@@ -59,8 +59,8 @@ log() {
 }
 
 # ---- preflight: source DB --------------------------------------------------
-if [ ! -f "${AMC_DB_PATH}" ]; then
-    log "ERROR" "source DB missing at ${AMC_DB_PATH}"
+if [ ! -f "${AMG_DB_PATH}" ]; then
+    log "ERROR" "source DB missing at ${AMG_DB_PATH}"
     exit 1
 fi
 
@@ -72,9 +72,9 @@ fi
 
 # ---- perform backup --------------------------------------------------------
 DATE_STAMP="$(date -u +"%Y-%m-%d")"
-TARGET="${BACKUP_DIR}/amc-${DATE_STAMP}.db"
+TARGET="${BACKUP_DIR}/amg-${DATE_STAMP}.db"
 
-log "INFO" "starting backup: ${AMC_DB_PATH} -> ${TARGET}"
+log "INFO" "starting backup: ${AMG_DB_PATH} -> ${TARGET}"
 
 # Use the SQLite Online Backup API. This produces a consistent snapshot even
 # while the adapter is writing (WAL-safe) and is atomic — sqlite3 writes to
@@ -82,7 +82,7 @@ log "INFO" "starting backup: ${AMC_DB_PATH} -> ${TARGET}"
 #
 # We capture stderr so a disk-full / permissions / I/O error surfaces in the
 # log with the underlying SQLite message rather than being silently lost.
-backup_err="$(sqlite3 "${AMC_DB_PATH}" ".backup '${TARGET}'" 2>&1 >/dev/null)"
+backup_err="$(sqlite3 "${AMG_DB_PATH}" ".backup '${TARGET}'" 2>&1 >/dev/null)"
 backup_status=$?
 
 if [ ${backup_status} -ne 0 ]; then
@@ -104,7 +104,7 @@ backup_size="$(wc -c < "${TARGET}" | tr -d ' ')"
 log "INFO" "backup succeeded: ${TARGET} (${backup_size} bytes)"
 
 # ---- retention: prune backups older than RETENTION_DAYS --------------------
-# Match files of the form amc-YYYY-MM-DD.db only; do not touch anything else
+# Match files of the form amg-YYYY-MM-DD.db only; do not touch anything else
 # the operator may have parked in this dir.
 pruned=0
 while IFS= read -r -d '' old; do
@@ -118,7 +118,7 @@ done < <(
     find "${BACKUP_DIR}" \
         -maxdepth 1 \
         -type f \
-        -name 'amc-????-??-??.db' \
+        -name 'amg-????-??-??.db' \
         -mtime "+${RETENTION_DAYS}" \
         -print0 2>/dev/null
 )

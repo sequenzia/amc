@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Static guard: scan the ``amc_mcp`` source tree for forbidden imports.
+"""Static guard: scan the ``amg_mcp`` source tree for forbidden imports.
 
 Spec §9.3 requires "Wrapper has zero platform-specific imports" — this
 script is the static enforcement, runnable outside pytest so CI / hand
@@ -9,7 +9,7 @@ Usage::
 
     python scripts/import_audit.py [package-dir]
 
-Default package dir is ``<repo>/src/amc_mcp``. The audit parses each ``.py``
+Default package dir is ``<repo>/src/amg_mcp``. The audit parses each ``.py``
 with ``ast`` and inspects only module specifiers — a docstring or tool
 description that mentions e.g. "Discord" never produces a false positive.
 
@@ -86,7 +86,7 @@ def audit_package(package_dir: Path) -> list[Violation]:
 
 def _default_package_dir() -> Path:
     here = Path(__file__).resolve().parent
-    return here.parent / "src" / "amc_mcp"
+    return here.parent / "src" / "amg_mcp"
 
 
 def main(argv: list[str]) -> int:

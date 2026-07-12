@@ -1,4 +1,4 @@
-"""Tests for the per-channel token-bucket rate limiter (`amc.core.rate_limit`).
+"""Tests for the per-channel token-bucket rate limiter (`amg.core.rate_limit`).
 
 Covers spec §5.2 (outbound rate-limit acceptance criteria), §6.4
 (reliability), and §11.2 (env-var configuration).
@@ -16,7 +16,7 @@ import pytest
 from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
-from amc.core.rate_limit import (
+from amg.core.rate_limit import (
     ENV_BURST,
     ENV_RPS,
     RateLimitConfigError,
@@ -166,7 +166,7 @@ async def test_concurrent_acquire_different_channels_independent():
 
 
 async def test_env_configures_rps_and_burst(monkeypatch: pytest.MonkeyPatch):
-    """`from_env()` honors AMC_RATE_LIMIT_PER_CHANNEL_{RPS,BURST}."""
+    """`from_env()` honors AMG_RATE_LIMIT_PER_CHANNEL_{RPS,BURST}."""
 
     monkeypatch.setenv(ENV_RPS, "2.5")
     monkeypatch.setenv(ENV_BURST, "7")
@@ -207,7 +207,7 @@ def test_zero_or_negative_burst_rejected(bad_burst: int):
 
 
 def test_env_negative_rps_rejected(monkeypatch: pytest.MonkeyPatch):
-    """`from_env()` rejects AMC_RATE_LIMIT_PER_CHANNEL_RPS=0 at startup."""
+    """`from_env()` rejects AMG_RATE_LIMIT_PER_CHANNEL_RPS=0 at startup."""
 
     monkeypatch.setenv(ENV_RPS, "0")
     monkeypatch.setenv(ENV_BURST, "5")
@@ -217,7 +217,7 @@ def test_env_negative_rps_rejected(monkeypatch: pytest.MonkeyPatch):
 
 
 def test_env_negative_burst_rejected(monkeypatch: pytest.MonkeyPatch):
-    """`from_env()` rejects AMC_RATE_LIMIT_PER_CHANNEL_BURST=-3 at startup."""
+    """`from_env()` rejects AMG_RATE_LIMIT_PER_CHANNEL_BURST=-3 at startup."""
 
     monkeypatch.setenv(ENV_RPS, "1.0")
     monkeypatch.setenv(ENV_BURST, "-3")

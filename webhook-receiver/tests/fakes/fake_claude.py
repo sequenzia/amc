@@ -8,7 +8,7 @@ Usage::
 
     invocation_log = tmp_path / "invocations.jsonl"
     fake_claude_path = make_fake_claude(tmp_path, invocation_log)
-    monkeypatch.setenv("AMC_RECEIVER_CLAUDE_BIN", str(fake_claude_path))
+    monkeypatch.setenv("AMG_RECEIVER_CLAUDE_BIN", str(fake_claude_path))
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ def main() -> int:
         "env": {
             k: v
             for k, v in os.environ.items()
-            if k.startswith("AMC_")
+            if k.startswith("AMG_")
             or k.startswith("FAKE_CLAUDE_")
             or k.startswith("CLAUDE_CODE_")
             or k in ("ENABLE_TOOL_SEARCH", "CLAUDECODE")
@@ -54,7 +54,7 @@ if __name__ == "__main__":
 def make_fake_claude(tmp_path: Path, invocation_log: Path) -> Path:
     """Drop a thin executable wrapper that runs this module via Python.
 
-    Returns the path tests should pass as ``AMC_RECEIVER_CLAUDE_BIN``.
+    Returns the path tests should pass as ``AMG_RECEIVER_CLAUDE_BIN``.
     """
     script_path = tmp_path / "fake-claude"
     fake_claude_module = Path(__file__).resolve()

@@ -36,8 +36,8 @@ from typing import Any
 from alembic import command
 from alembic.config import Config
 
-from amc.core.allowlist import AllowlistEntry, AllowlistLoader
-from amc.core.envelope import Source
+from amg.core.allowlist import AllowlistEntry, AllowlistLoader
+from amg.core.envelope import Source
 
 __all__ = [
     "append_chat_db_inbound_row",
@@ -60,8 +60,8 @@ __all__ = [
 def apply_alembic_head(alembic_ini: Path, db_path: Path) -> None:
     """Run ``alembic upgrade head`` against ``db_path``.
 
-    ``alembic.command.upgrade`` reads ``AMC_DB_PATH`` from the
-    environment via :func:`amc.core.db.create_engine_from_env`; the
+    ``alembic.command.upgrade`` reads ``AMG_DB_PATH`` from the
+    environment via :func:`amg.core.db.create_engine_from_env`; the
     caller is responsible for setting that env var with
     ``monkeypatch.setenv`` before calling this helper.
     """

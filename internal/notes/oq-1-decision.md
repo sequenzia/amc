@@ -66,7 +66,7 @@ If the client submits the same id twice in one call, the server deduplicates bef
 
 ## Implementation summary
 
-- Endpoint: `amc/api/messages_mark_read.py`
+- Endpoint: `amg/api/messages_mark_read.py`
 - `marked_count = len(set(payload.message_ids))` after deduplication
 - Per-id UPSERT wrapped in a savepoint so FK violations do not poison the batch
 - Empty `message_ids` returns `{ "marked_count": 0 }` without touching the DB

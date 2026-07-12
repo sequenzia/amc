@@ -17,8 +17,8 @@ import pytest
 from mcp.server.fastmcp import FastMCP
 from mcp.server.fastmcp.exceptions import ToolError
 
-from amc_mcp.http_client import HttpOk, HttpResult
-from amc_mcp.tools import (
+from amg_mcp.http_client import HttpOk, HttpResult
+from amg_mcp.tools import (
     register_get_message_context,
     register_list_unread_messages,
     register_mark_read,

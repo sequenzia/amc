@@ -1,4 +1,4 @@
-"""Tests for ``amc.connectors.discord.connector.DiscordConnector``.
+"""Tests for ``amg.connectors.discord.connector.DiscordConnector``.
 
 Each test wires the connector to the in-process fakes built in tasks
 #17/#18:
@@ -27,16 +27,16 @@ from typing import Any
 import discord
 import pytest
 
-from amc.connectors.discord.connector import (
-    AmcDiscordErrorCode,
+from amg.connectors.discord.connector import (
+    AmgDiscordErrorCode,
     DiscordConnector,
     SendResult,
     build_channel_id,
     parse_channel_id,
     parse_cursor,
 )
-from amc.core.allowlist import AllowlistEntry, AllowlistLoader
-from amc.core.envelope import (
+from amg.core.allowlist import AllowlistEntry, AllowlistLoader
+from amg.core.envelope import (
     AllowlistStatus,
     ChannelType,
     Direction,
@@ -56,7 +56,7 @@ MESSAGE_TIMEOUT = 5.0
 
 
 class _FakeMessageSink:
-    """Minimal stand-in for :class:`amc.core.message_sink.MessageSink`.
+    """Minimal stand-in for :class:`amg.core.message_sink.MessageSink`.
 
     Records every inbound call as ``(envelope, cursor, allowlist_status)``.
     The status is computed exactly like the real sink (resolve against the
@@ -545,7 +545,7 @@ async def test_send_403_maps_to_platform_auth(
                 "no permission",
             )
             assert result.ok is False
-            assert result.error == AmcDiscordErrorCode.PLATFORM_AUTH.value
+            assert result.error == AmgDiscordErrorCode.PLATFORM_AUTH.value
             assert connector.degraded is True
     finally:
         await _stop_connector(connector, task)
@@ -571,7 +571,7 @@ async def test_send_401_maps_to_platform_auth(
                 "bad token",
             )
             assert result.ok is False
-            assert result.error == AmcDiscordErrorCode.PLATFORM_AUTH.value
+            assert result.error == AmgDiscordErrorCode.PLATFORM_AUTH.value
             assert connector.degraded is True
     finally:
         await _stop_connector(connector, task)
@@ -601,7 +601,7 @@ async def test_send_persistent_5xx_maps_to_platform_send_failed(
                 "server is down",
             )
             assert result.ok is False
-            assert result.error == AmcDiscordErrorCode.PLATFORM_SEND_FAILED.value
+            assert result.error == AmgDiscordErrorCode.PLATFORM_SEND_FAILED.value
             # 5xx is NOT a credential failure — connector stays healthy so the
             # adapter doesn't shed all subsequent traffic on a transient outage.
             assert connector.degraded is False
@@ -641,7 +641,7 @@ async def test_send_invalid_channel_id_returns_error(
         with FakeDiscordRest() as rest:
             result = await connector.send("not-a-discord-channel", "x")
             assert result.ok is False
-            assert result.error == AmcDiscordErrorCode.PLATFORM_SEND_FAILED.value
+            assert result.error == AmgDiscordErrorCode.PLATFORM_SEND_FAILED.value
             assert rest.sent_messages == []
     finally:
         await _stop_connector(connector, task)
@@ -765,7 +765,7 @@ def test_parse_channel_id_round_trip() -> None:
 
 
 def test_parse_channel_id_rejects_garbage() -> None:
-    from amc.connectors.discord.connector import ChannelIdParseError
+    from amg.connectors.discord.connector import ChannelIdParseError
 
     with pytest.raises(ChannelIdParseError):
         parse_channel_id("imessage:dm:1")

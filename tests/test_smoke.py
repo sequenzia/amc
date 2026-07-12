@@ -1,7 +1,7 @@
-"""Bootstrap smoke test — confirms the `amc` package is importable."""
+"""Bootstrap smoke test — confirms the `amg` package is importable."""
 
 
 def test_package_imports() -> None:
-    import amc
+    import amg
 
-    assert amc is not None
+    assert amg is not None

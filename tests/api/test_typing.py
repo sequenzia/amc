@@ -26,15 +26,15 @@ import structlog
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amc.api.typing import (
+from amg.api.typing import (
     DiscordTypingClient,
     TypingRequest,
     configure_discord_typing_client,
     reset_discord_typing_client,
     router,
 )
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.errors import register_exception_handlers
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.errors import register_exception_handlers
 
 BEARER = "test-bearer-typing-token"
 
@@ -332,7 +332,7 @@ class TestErrorSwallowing:
         """Per task: connector errors are logged at WARN, never ERROR.
 
         Uses ``structlog.testing.capture_logs`` because the project routes
-        log events through structlog (see ``amc/core/logging.py``); stdlib
+        log events through structlog (see ``amg/core/logging.py``); stdlib
         ``caplog`` only catches the bridged handler when
         ``configure_logging()`` has installed it, which the test app does
         not.

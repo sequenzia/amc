@@ -8,9 +8,9 @@ resolution-markers = [
 
 [manifest]
 members = [
-    "amc",
-    "amc-mcp",
-    "amc-receiver",
+    "amg",
+    "amg-mcp",
+    "amg-receiver",
 ]
 
 [[package]]
@@ -144,7 +144,7 @@ wheels = [
 ]
 
 [[package]]
-name = "amc"
+name = "amg"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
@@ -209,7 +209,7 @@ docs = [
 ]
 
 [[package]]
-name = "amc-mcp"
+name = "amg-mcp"
 version = "0.1.0"
 source = { editable = "mcp" }
 dependencies = [
@@ -242,7 +242,7 @@ dev = [
 ]
 
 [[package]]
-name = "amc-receiver"
+name = "amg-receiver"
 version = "0.1.0"
 source = { editable = "webhook-receiver" }
 dependencies = [

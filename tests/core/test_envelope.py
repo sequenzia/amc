@@ -1,6 +1,6 @@
 """Tests for the normalized message envelope (spec §7.3.1).
 
-Imported via the direct module path so we don't depend on `amc.core.__init__`
+Imported via the direct module path so we don't depend on `amg.core.__init__`
 re-exporting anything (siblings keep that file empty during Wave 3).
 """
 
@@ -15,7 +15,7 @@ from hypothesis import strategies as st
 from pydantic import ValidationError
 from ulid import ULID
 
-from amc.core.envelope import (
+from amg.core.envelope import (
     AllowlistStatus,
     Attachment,
     ChannelType,

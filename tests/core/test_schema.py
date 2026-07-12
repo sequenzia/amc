@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.schema`` + the ``001_init`` Alembic migration.
+"""Tests for ``amg.core.schema`` + the ``001_init`` Alembic migration.
 
 These tests apply the migration to a tmp_path SQLite DB and introspect
 ``sqlite_master`` to assert every index, table, and ``CHECK`` constraint
@@ -10,7 +10,7 @@ Coverage:
 - All nine tables exist after ``upgrade head``
 - Every required index (named per spec) exists
 - Every CHECK constraint mentioned in §7.3.3 fires (probed via failing INSERT)
-- WAL mode is enabled by :func:`amc.core.db.create_engine_from_env`
+- WAL mode is enabled by :func:`amg.core.db.create_engine_from_env`
 - ``downgrade base`` removes everything except ``alembic_version``
 - Re-running ``upgrade head`` is a no-op (idempotent)
 - ``messages.allowlist_status = 'outbound'`` is permitted (spec note)
@@ -28,7 +28,7 @@ import pytest
 from alembic import command
 from alembic.config import Config
 
-from amc.core.db import build_database_url, create_engine_from_env
+from amg.core.db import build_database_url, create_engine_from_env
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -71,12 +71,12 @@ EXPECTED_INDEXES = {
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file.
 
-    Yields the path. The Alembic env.py reads ``$AMC_DB_PATH``; we set it
+    Yields the path. The Alembic env.py reads ``$AMG_DB_PATH``; we set it
     here so the migration targets our throwaway DB rather than the dev
     default location.
     """
     db_path = tmp_path / "schema.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     yield db_path
@@ -290,7 +290,7 @@ def test_connector_state_source_check(fresh_db: Path) -> None:
 
 def test_upgrade_head_is_idempotent(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     db_path = tmp_path / "idem.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     # Second upgrade must be a no-op — no error, version unchanged.
@@ -304,7 +304,7 @@ def test_downgrade_base_drops_everything_cleanly(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "down.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "base")
@@ -364,7 +364,7 @@ def test_create_engine_from_env_enables_wal(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "wal.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     engine = create_engine_from_env()
 
     async def _check() -> str:
@@ -383,7 +383,7 @@ def test_create_engine_from_env_enables_fk_enforcement(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     db_path = tmp_path / "fk.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     engine = create_engine_from_env()
 
     async def _check() -> int:

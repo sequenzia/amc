@@ -1,7 +1,7 @@
 """Static guard test for ``scripts/import_audit.py``.
 
 Mirrors ``mcp-wrapper/tests/import-audit.test.ts``: covers the helpers and
-the exit-code contract. The real ``amc_mcp`` source tree is also walked to
+the exit-code contract. The real ``amg_mcp`` source tree is also walked to
 prove no platform-specific imports leaked in.
 """
 
@@ -17,7 +17,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 SCRIPT = REPO / "scripts" / "import_audit.py"
-PACKAGE_DIR = REPO / "src" / "amc_mcp"
+PACKAGE_DIR = REPO / "src" / "amg_mcp"
 
 
 def _load_module():
@@ -41,9 +41,9 @@ class TestExtractImportSpecifiers:
         assert "os" in names and "sys" in names
 
     def test_handles_from_imports(self, audit_mod) -> None:
-        src = "from amc_mcp.tools import context"
+        src = "from amg_mcp.tools import context"
         names = [n for n, _ in audit_mod.extract_import_specifiers(src)]
-        assert names == ["amc_mcp.tools"]
+        assert names == ["amg_mcp.tools"]
 
     def test_handles_aliased_imports(self, audit_mod) -> None:
         src = "import discord as d"
@@ -70,14 +70,14 @@ class TestExtractImportSpecifiers:
 class TestFindForbiddenToken:
     def test_matches_known_tokens(self, audit_mod) -> None:
         assert audit_mod.find_forbidden_token("discord.client") == "discord"
-        assert audit_mod.find_forbidden_token("amc.connectors.imessage") == "imessage"
+        assert audit_mod.find_forbidden_token("amg.connectors.imessage") == "imessage"
         assert audit_mod.find_forbidden_token("subprocess_osascript") == "osascript"
 
     def test_case_insensitive(self, audit_mod) -> None:
         assert audit_mod.find_forbidden_token("AppleScript_helpers") == "applescript"
 
     def test_returns_none_for_safe_specifiers(self, audit_mod) -> None:
-        assert audit_mod.find_forbidden_token("amc_mcp.http_client") is None
+        assert audit_mod.find_forbidden_token("amg_mcp.http_client") is None
         assert audit_mod.find_forbidden_token("httpx") is None
 
 
@@ -87,7 +87,7 @@ class TestAuditPackage:
         assert violations == []
 
     def test_detects_planted_violation(self, audit_mod, tmp_path: Path) -> None:
-        pkg = tmp_path / "amc_mcp"
+        pkg = tmp_path / "amg_mcp"
         pkg.mkdir()
         (pkg / "__init__.py").write_text("")
         (pkg / "bad.py").write_text("import discord\n")
@@ -113,7 +113,7 @@ class TestExitCodes:
         assert "OK" in result.stdout
 
     def test_exit_one_on_violation(self, tmp_path: Path) -> None:
-        pkg = tmp_path / "amc_mcp"
+        pkg = tmp_path / "amg_mcp"
         pkg.mkdir()
         (pkg / "__init__.py").write_text("")
         (pkg / "bad.py").write_text("from chat.db import x\n")

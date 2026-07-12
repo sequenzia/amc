@@ -1,12 +1,12 @@
-"""Tests for ``amc.connectors.imessage.connector.ImessageConnector``.
+"""Tests for ``amg.connectors.imessage.connector.ImessageConnector``.
 
 The connector is the inbound poller + outbound AppleScript driver for
 the iMessage path (spec §5.1, §5.2, §7.5). These tests exercise it
 against the Phase 0 fixture chat.db (built by
 ``tests/fixtures/build_chat_db.py``), the
 :class:`tests.fakes.applescript.FakeAppleScriptSender`, an in-memory
-:class:`amc.core.allowlist.AllowlistLoader`, and the real
-:class:`amc.core.message_sink.MessageSink` against a tmp-path SQLite.
+:class:`amg.core.allowlist.AllowlistLoader`, and the real
+:class:`amg.core.message_sink.MessageSink` against a tmp-path SQLite.
 
 Coverage map (acceptance criterion -> test):
 
@@ -51,23 +51,23 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.connectors.imessage.applescript import SendResult
-from amc.connectors.imessage.connector import (
+from amg.connectors.imessage.applescript import SendResult
+from amg.connectors.imessage.connector import (
     DEFAULT_POLL_INTERVAL_SECONDS,
     ROWID_GAP_WARN_THRESHOLD,
     ImessageConnector,
 )
-from amc.connectors.imessage.reader import ChatDbPathMissingError, ChatDbReader
-from amc.core.allowlist import AllowlistEntry, AllowlistLoader
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import (
+from amg.connectors.imessage.reader import ChatDbPathMissingError, ChatDbReader
+from amg.core.allowlist import AllowlistEntry, AllowlistLoader
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import (
     AllowlistStatus,
     ChannelType,
     Direction,
     Envelope,
     Source,
 )
-from amc.core.message_sink import MessageSink
+from amg.core.message_sink import MessageSink
 from tests.fakes.applescript import FakeAppleScriptSender
 from tests.fixtures.build_chat_db import (
     ALLOWLISTED_HANDLE,
@@ -105,8 +105,8 @@ def chat_db_copy(src_chat_db_path: Path, tmp_path: Path) -> Path:
 @pytest.fixture
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """tmp_path SQLite file with the full schema applied via alembic."""
-    db_path = tmp_path / "amc.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    db_path = tmp_path / "amg.db"
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     yield db_path
@@ -721,7 +721,7 @@ async def test_connector_restart_resumes_from_cursor(
     finally:
         await connector1.stop()
 
-    # New reader + connector pointed at the same chat.db / amc.db.
+    # New reader + connector pointed at the same chat.db / amg.db.
     reader2 = ChatDbReader(chat_db_copy)
     connector2 = ImessageConnector(
         reader=reader2,
@@ -814,8 +814,8 @@ def _ensure_logger_capturable(name: str) -> None:
 
 
 @pytest.fixture(autouse=True)
-def _restore_amc_loggers_after_alembic() -> Iterator[None]:
-    """Restore ``amc.*`` loggers after tests in this file run.
+def _restore_amg_loggers_after_alembic() -> Iterator[None]:
+    """Restore ``amg.*`` loggers after tests in this file run.
 
     This module's ``fresh_db`` fixture runs ``alembic upgrade head``,
     which calls ``logging.config.fileConfig`` with
@@ -824,26 +824,26 @@ def _restore_amc_loggers_after_alembic() -> Iterator[None]:
     breaking pytest's ``caplog`` handler in *subsequent* tests
     (notably ``test_reader.py::test_database_locked_logs_and_raises_for_caller_retry``).
 
-    The autouse fixture re-enables every ``amc.*`` logger after each
+    The autouse fixture re-enables every ``amg.*`` logger after each
     test so cross-file ordering stays clean. Cheap: walks the small
-    fixed set of loggers AMC creates.
+    fixed set of loggers AMG creates.
     """
     yield
     for name in (
-        "amc.connectors.imessage.connector",
-        "amc.connectors.imessage.reader",
-        "amc.connectors.imessage.applescript",
-        "amc.connectors.discord.connector",
-        "amc.core.allowlist",
-        "amc.core.attachments",
-        "amc.core.auth",
-        "amc.core.errors",
-        "amc.core.idempotency",
-        "amc.core.logging",
-        "amc.core.message_sink",
-        "amc.core.rate_limit",
-        "amc.core.sweepers",
-        "amc.core.webhook",
+        "amg.connectors.imessage.connector",
+        "amg.connectors.imessage.reader",
+        "amg.connectors.imessage.applescript",
+        "amg.connectors.discord.connector",
+        "amg.core.allowlist",
+        "amg.core.attachments",
+        "amg.core.auth",
+        "amg.core.errors",
+        "amg.core.idempotency",
+        "amg.core.logging",
+        "amg.core.message_sink",
+        "amg.core.rate_limit",
+        "amg.core.sweepers",
+        "amg.core.webhook",
     ):
         logger = logging.getLogger(name)
         logger.disabled = False
@@ -868,7 +868,7 @@ async def test_send_failure_returns_platform_send_failed(
     path doesn't need persistence — the connector falls back to
     ``iMessage;-;<channel_id>`` when no metadata is configured.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
     fake_sender = FakeAppleScriptSender()
     fake_sender.queue_outcome(
         SendResult(ok=False, error="timeout", raw_stderr="osascript hung")
@@ -886,7 +886,7 @@ async def test_send_failure_returns_platform_send_failed(
     )
 
     # Don't start the poller — we only exercise the outbound path.
-    with caplog.at_level(logging.ERROR, logger="amc.connectors.imessage.connector"):
+    with caplog.at_level(logging.ERROR, logger="amg.connectors.imessage.connector"):
         result = await connector.send(ALLOWLISTED_HANDLE, "hello")
 
     assert result.ok is False
@@ -1017,12 +1017,12 @@ async def test_cursor_read_failure_logs_error_and_treats_as_fresh_install(
 
     Per task #52 acceptance: "Cursor read fails -> log ERROR, treat as
     fresh install". The connector must NOT mark itself degraded on a
-    transient AMC DB hiccup; instead it logs ERROR and seeds the
+    transient AMG DB hiccup; instead it logs ERROR and seeds the
     in-memory cursor from ``MAX(message.ROWID)`` in chat.db so the
     poll loop starts cleanly. The next successful sink transaction
     heals the ``connector_state`` row.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
 
     class _BrokenSessionFactory:
         def __call__(self) -> object:
@@ -1046,7 +1046,7 @@ async def test_cursor_read_failure_logs_error_and_treats_as_fresh_install(
         poll_interval_seconds=TEST_POLL_INTERVAL,
     )
 
-    with caplog.at_level(logging.ERROR, logger="amc.connectors.imessage.connector"):
+    with caplog.at_level(logging.ERROR, logger="amg.connectors.imessage.connector"):
         await connector.start()
 
     # The poll loop is running (NOT degraded).
@@ -1378,10 +1378,10 @@ async def test_cursor_recovery_no_session_factory_seeds_from_chat_db(
 ) -> None:
     """``session_factory=None`` (test fakes): seed from chat.db max ROWID.
 
-    With no AMC DB configured, ``_read_cursor_at_startup`` returns
+    With no AMG DB configured, ``_read_cursor_at_startup`` returns
     ``None`` (treated as fresh install). The seed reads
     ``MAX(message.ROWID)`` from chat.db so the historical backlog is
-    NOT replayed even in test setups without an AMC DB.
+    NOT replayed even in test setups without an AMG DB.
     """
     reader = ChatDbReader(chat_db_copy)
     sink = _RecordingSink(allowlist)
@@ -1464,7 +1464,7 @@ async def test_seed_from_chat_db_returns_zero_when_chat_db_unreadable(
     conservative fallback that prefers replay over silent skip when
     the chat.db itself can't be inspected.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
 
     # Build a connector pointed at a real chat.db, then replace the
     # reader's path with a non-existent file so the seed query fails.
@@ -1484,7 +1484,7 @@ async def test_seed_from_chat_db_returns_zero_when_chat_db_unreadable(
         poll_interval_seconds=TEST_POLL_INTERVAL,
     )
 
-    with caplog.at_level(logging.WARNING, logger="amc.connectors.imessage.connector"):
+    with caplog.at_level(logging.WARNING, logger="amg.connectors.imessage.connector"):
         seed = connector._seed_cursor_from_chat_db()
 
     assert seed == 0
@@ -1583,7 +1583,7 @@ async def test_rowid_gap_above_threshold_logs_warn(
     appended a backlog). The connector must log WARN with both the
     last cursor and the new max ROWID.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
 
     # Inject a sparse backlog: a few rows clustered well past the
     # fixture's max ROWID (=6) so the gap from cursor=0 jumps to ~520.
@@ -1602,7 +1602,7 @@ async def test_rowid_gap_above_threshold_logs_warn(
         poll_interval_seconds=TEST_POLL_INTERVAL,
     )
 
-    with caplog.at_level(logging.WARNING, logger="amc.connectors.imessage.connector"):
+    with caplog.at_level(logging.WARNING, logger="amg.connectors.imessage.connector"):
         await connector.start()
         try:
             # Wait for the first poll cycle to drain everything.
@@ -1644,7 +1644,7 @@ async def test_rowid_gap_at_or_below_threshold_no_warn(
     keeps the per-cycle gap small (<=100). The connector must NOT
     emit the gap WARN.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
 
     reader = ChatDbReader(chat_db_copy)
     sink = _RecordingSink(allowlist)
@@ -1657,7 +1657,7 @@ async def test_rowid_gap_at_or_below_threshold_no_warn(
         poll_interval_seconds=TEST_POLL_INTERVAL,
     )
 
-    with caplog.at_level(logging.WARNING, logger="amc.connectors.imessage.connector"):
+    with caplog.at_level(logging.WARNING, logger="amg.connectors.imessage.connector"):
         await connector.start()
         try:
             # Drain the historical 6 rows.
@@ -1700,7 +1700,7 @@ async def test_rowid_gap_large_backlog_processes_all_rows_in_order(
     * Sink records arrive in ascending ROWID order.
     * No ROWID is delivered twice.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
 
     backlog = list(range(100, 300))  # 200 rows, ROWIDs 100..299
     _append_inbound_rows_bulk(chat_db_copy, rowids=backlog, text_prefix="backlog")
@@ -1758,7 +1758,7 @@ async def test_rowid_gap_sparse_backlog_uses_max_rowid_for_gap(
     501 still trips the WARN because the max ROWID jump from cursor=0
     is 501 (>100). The WARN's ``new_max`` must reflect that max ROWID.
     """
-    _ensure_logger_capturable("amc.connectors.imessage.connector")
+    _ensure_logger_capturable("amg.connectors.imessage.connector")
 
     _append_inbound_rows_bulk(
         chat_db_copy, rowids=[200, 350, 501], text_prefix="sparse"
@@ -1775,7 +1775,7 @@ async def test_rowid_gap_sparse_backlog_uses_max_rowid_for_gap(
         poll_interval_seconds=TEST_POLL_INTERVAL,
     )
 
-    with caplog.at_level(logging.WARNING, logger="amc.connectors.imessage.connector"):
+    with caplog.at_level(logging.WARNING, logger="amg.connectors.imessage.connector"):
         await connector.start()
         try:
             ok = await _wait_until(lambda: len(sink.records) >= 9, timeout=2.0)

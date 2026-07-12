@@ -1,13 +1,13 @@
 # Operations — Overview
 
-This page orients an operator to running AMC in production on a single Mac. It is a hub: the deep procedures live in the [Runbook](runbook.md), and the full first-time walkthrough (macOS permissions, Discord bot, channel allowlist) lives in the [Setup Guide](../getting-started/index.md).
+This page orients an operator to running AMG in production on a single Mac. It is a hub: the deep procedures live in the [Runbook](runbook.md), and the full first-time walkthrough (macOS permissions, Discord bot, channel allowlist) lives in the [Setup Guide](../getting-started/index.md).
 
 !!! note "Scope"
-    AMC is a personal-scale, single-Mac service. Everything below assumes one operator running the adapter under their own login session — not a multi-tenant or cluster deployment.
+    AMG is a personal-scale, single-Mac service. Everything below assumes one operator running the adapter under their own login session — not a multi-tenant or cluster deployment.
 
 ## Deployment shape
 
-AMC runs as per-user `launchd` **LaunchAgents** on one Mac. There are three services, all managed through the [amc CLI](../reference/cli.md):
+AMG runs as per-user `launchd` **LaunchAgents** on one Mac. There are three services, all managed through the [amg CLI](../reference/cli.md):
 
 | Service | What it is | Port | Notes |
 | --- | --- | --- | --- |
@@ -31,20 +31,20 @@ flowchart LR
 Install all three and verify:
 
 ```bash
-amc install        # render plists + bootstrap launchd services
-amc status         # is each service loaded and running?
-amc doctor         # environment, permissions, and config sanity checks
+amg install        # render plists + bootstrap launchd services
+amg status         # is each service loaded and running?
+amg doctor         # environment, permissions, and config sanity checks
 ```
 
 !!! tip "First-time setup is more than install"
-    `amc install` wires up the services, but a working install also needs Full Disk Access for `chat.db`, the Messages Automation prompt, a Discord bot token, and a channel allowlist. Walk through all of it in the [Setup Guide](../getting-started/index.md).
+    `amg install` wires up the services, but a working install also needs Full Disk Access for `chat.db`, the Messages Automation prompt, a Discord bot token, and a channel allowlist. Walk through all of it in the [Setup Guide](../getting-started/index.md).
 
 ## Where state lives
 
 | What | Path | Override / reference |
 | --- | --- | --- |
-| Database | `~/Library/Application Support/messaging-agent/state.db` | `AMC_DB_PATH` — see [Storage Schema](../architecture/storage.md). |
-| Attachments | `~/Library/Application Support/messaging-agent/attachments` | `AMC_ATTACHMENT_DIR`. |
+| Database | `~/Library/Application Support/messaging-agent/state.db` | `AMG_DB_PATH` — see [Storage Schema](../architecture/storage.md). |
+| Attachments | `~/Library/Application Support/messaging-agent/attachments` | `AMG_ATTACHMENT_DIR`. |
 | Logs | `~/Library/Logs/messaging-agent/` | Daily-rotated structured JSON, e.g. `adapter-YYYY-MM-DD.log`. |
 | Config | `~/.config/messaging-agent/.env` and `allowlist.toml` | Both `chmod 0600` — see [Configuration](../reference/configuration.md). |
 
@@ -62,7 +62,7 @@ Together these meet the spec's RTO target of **≤5 minutes** to recover after a
     The plist's `EnvironmentVariables` is intentionally empty — all configuration belongs in `~/.config/messaging-agent/.env`. As a result, a config change only needs a restart, never a reinstall:
 
     ```bash
-    amc service restart adapter
+    amg service restart adapter
     ```
 
 ## Keeping the Mac awake
@@ -72,7 +72,7 @@ When the Mac sleeps, the iMessage poller is suspended and stops processing new m
 - Run under `caffeinate`:
 
     ```bash
-    caffeinate -dimsu -- amc serve adapter
+    caffeinate -dimsu -- amg serve adapter
     ```
 
 - Or, in System Settings → Energy / Battery, enable **Prevent automatic sleeping when the display is off** plus **Wake for network access**.
@@ -92,11 +92,11 @@ cd <install dir>
 git pull
 uv sync --all-packages
 uv run alembic upgrade head
-amc service restart adapter
+amg service restart adapter
 ```
 
-!!! note "When to re-run `amc install`"
-    Re-run `amc install` **only** if a plist template under `ops/launchd/` changed. A code or config update does not need it — a `service restart` is enough.
+!!! note "When to re-run `amg install`"
+    Re-run `amg install` **only** if a plist template under `ops/launchd/` changed. A code or config update does not need it — a `service restart` is enough.
 
 To roll back a bad release:
 
@@ -104,15 +104,15 @@ To roll back a bad release:
 uv run alembic downgrade -1   # only if a migration is at fault
 git checkout <prev-sha>
 uv sync --all-packages
-amc service restart adapter
+amg service restart adapter
 ```
 
 ## Observability quick hits
 
 ```bash
-amc status                                          # loaded / running state per service
-amc doctor                                          # environment + permission checks
-amc logs adapter                                    # tail the structured JSON logs
+amg status                                          # loaded / running state per service
+amg doctor                                          # environment + permission checks
+amg logs adapter                                    # tail the structured JSON logs
 curl -sS http://127.0.0.1:8080/healthz | jq .       # health probe (needs the bearer header)
 ```
 
@@ -125,5 +125,5 @@ For failure diagnosis and step-by-step recovery, go straight to the [Runbook](ru
 
 - [Runbook](runbook.md) — failure modes and recovery procedures (the deep, day-2 reference).
 - [Webhook Receiver](webhook-receiver.md) — the push-to-agent bridge that turns inbound messages into one-shot agent invocations.
-- [amc CLI](../reference/cli.md) — `serve`, `install`, `service`, `status`, `logs`, `doctor`.
+- [amg CLI](../reference/cli.md) — `serve`, `install`, `service`, `status`, `logs`, `doctor`.
 - [Configuration](../reference/configuration.md) — environment variables, `.env`, and `allowlist.toml`.

@@ -1,9 +1,9 @@
-"""Tests for ``amc status`` (spec §5.6).
+"""Tests for ``amg status`` (spec §5.6).
 
 Coverage:
-* Functional: ``amc status`` emits a table with all six spec columns
+* Functional: ``amg status`` emits a table with all six spec columns
   (service, loaded, enabled, pid, last_exit, uptime).
-* Functional: ``amc status adapter`` emits exactly one row.
+* Functional: ``amg status adapter`` emits exactly one row.
 * Functional: ``--json`` emits a JSON-parseable array with identical
   fields (column ids preserved as keys).
 * Functional: non-TTY stdout renders plain text (no ANSI codes).
@@ -18,7 +18,7 @@ Coverage:
 * Uptime helper: ``humanize_uptime`` covers the seconds / minutes /
   hours / days bands plus negative-delta safety.
 
-Strategy: patch :mod:`amc.cli.status` and :mod:`amc.cli.launchctl`
+Strategy: patch :mod:`amg.cli.status` and :mod:`amg.cli.launchctl`
 seams (``print_service``, ``print_disabled_state``, ``_run_ps``) so the
 tests never touch a real ``launchctl`` or ``ps`` invocation.
 """
@@ -34,9 +34,9 @@ from datetime import datetime
 import pytest
 from typer.testing import CliRunner
 
-from amc.cli import status as status_mod
-from amc.cli.app import app
-from amc.cli.launchctl import PrintResult
+from amg.cli import status as status_mod
+from amg.cli.app import app
+from amg.cli.launchctl import PrintResult
 
 runner = CliRunner()
 
@@ -120,9 +120,9 @@ def test_status_all_emits_table_with_six_columns(
     _install_print_service(
         monkeypatch,
         {
-            "com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1001"),
-            "com.user.amc-webhook-receiver": _loaded("com.user.amc-webhook-receiver", pid="1002"),
-            "com.user.amc-backup": _loaded("com.user.amc-backup", pid="-", last_exit="0"),
+            "com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1001"),
+            "com.user.amg-webhook-receiver": _loaded("com.user.amg-webhook-receiver", pid="1002"),
+            "com.user.amg-backup": _loaded("com.user.amg-backup", pid="-", last_exit="0"),
         },
     )
     _install_disabled_state(monkeypatch, {})
@@ -145,7 +145,7 @@ def test_status_single_service_emits_one_row(
 ) -> None:
     _install_print_service(
         monkeypatch,
-        {"com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="2222")},
+        {"com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="2222")},
     )
     _install_disabled_state(monkeypatch, {})
     _disable_ps_probe(monkeypatch)
@@ -168,14 +168,14 @@ def test_status_json_emits_parseable_array(monkeypatch: pytest.MonkeyPatch) -> N
     _install_print_service(
         monkeypatch,
         {
-            "com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1001"),
-            "com.user.amc-webhook-receiver": _loaded(
-                "com.user.amc-webhook-receiver", pid="-", last_exit="-"
+            "com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1001"),
+            "com.user.amg-webhook-receiver": _loaded(
+                "com.user.amg-webhook-receiver", pid="-", last_exit="-"
             ),
-            "com.user.amc-backup": _loaded("com.user.amc-backup", pid="-", last_exit="-"),
+            "com.user.amg-backup": _loaded("com.user.amg-backup", pid="-", last_exit="-"),
         },
     )
-    _install_disabled_state(monkeypatch, {"com.user.amc-webhook-receiver": False})
+    _install_disabled_state(monkeypatch, {"com.user.amg-webhook-receiver": False})
     _disable_ps_probe(monkeypatch)
 
     result = runner.invoke(app, ["status", "--json"])
@@ -202,7 +202,7 @@ def test_status_json_emits_parseable_array(monkeypatch: pytest.MonkeyPatch) -> N
 def test_status_json_single_service(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_print_service(
         monkeypatch,
-        {"com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1234")},
+        {"com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1234")},
     )
     _install_disabled_state(monkeypatch, {})
     _disable_ps_probe(monkeypatch)
@@ -224,7 +224,7 @@ def test_status_json_single_service(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_status_non_tty_emits_plain_text(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_print_service(
         monkeypatch,
-        {"com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1234")},
+        {"com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1234")},
     )
     _install_disabled_state(monkeypatch, {})
     _disable_ps_probe(monkeypatch)
@@ -247,9 +247,9 @@ def test_status_unloaded_row_uses_dashes(monkeypatch: pytest.MonkeyPatch) -> Non
         monkeypatch,
         {
             # adapter loaded, receiver unloaded, backup loaded
-            "com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1001"),
-            "com.user.amc-webhook-receiver": _unloaded("com.user.amc-webhook-receiver"),
-            "com.user.amc-backup": _loaded("com.user.amc-backup", pid="1003"),
+            "com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1001"),
+            "com.user.amg-webhook-receiver": _unloaded("com.user.amg-webhook-receiver"),
+            "com.user.amg-backup": _loaded("com.user.amg-backup", pid="1003"),
         },
     )
     _install_disabled_state(monkeypatch, {})
@@ -271,7 +271,7 @@ def test_status_malformed_field_renders_unknown(
 ) -> None:
     """Spec §5.6 Edge Cases: parse failure → ``unknown``; CLI must not crash."""
     bad = PrintResult(
-        label="com.user.amc-adapter",
+        label="com.user.amg-adapter",
         loaded=True,
         returncode=0,
         pid="unknown",
@@ -281,7 +281,7 @@ def test_status_malformed_field_renders_unknown(
         raw_stderr="",
         fields={},
     )
-    _install_print_service(monkeypatch, {"com.user.amc-adapter": bad})
+    _install_print_service(monkeypatch, {"com.user.amg-adapter": bad})
     _install_disabled_state(monkeypatch, {})
     _disable_ps_probe(monkeypatch)
 
@@ -320,9 +320,9 @@ def test_status_all_loaded_exits_zero(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_print_service(
         monkeypatch,
         {
-            "com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1"),
-            "com.user.amc-webhook-receiver": _loaded("com.user.amc-webhook-receiver", pid="2"),
-            "com.user.amc-backup": _loaded("com.user.amc-backup", pid="3"),
+            "com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1"),
+            "com.user.amg-webhook-receiver": _loaded("com.user.amg-webhook-receiver", pid="2"),
+            "com.user.amg-backup": _loaded("com.user.amg-backup", pid="3"),
         },
     )
     _install_disabled_state(monkeypatch, {})
@@ -339,13 +339,13 @@ def test_status_loaded_but_not_running_still_exits_zero(
     _install_print_service(
         monkeypatch,
         {
-            "com.user.amc-adapter": _loaded(
-                "com.user.amc-adapter", pid="-", last_exit="0", state="not running"
+            "com.user.amg-adapter": _loaded(
+                "com.user.amg-adapter", pid="-", last_exit="0", state="not running"
             ),
-            "com.user.amc-webhook-receiver": _loaded(
-                "com.user.amc-webhook-receiver", pid="-", last_exit="-"
+            "com.user.amg-webhook-receiver": _loaded(
+                "com.user.amg-webhook-receiver", pid="-", last_exit="-"
             ),
-            "com.user.amc-backup": _loaded("com.user.amc-backup", pid="-", last_exit="-"),
+            "com.user.amg-backup": _loaded("com.user.amg-backup", pid="-", last_exit="-"),
         },
     )
     _install_disabled_state(monkeypatch, {})
@@ -361,8 +361,8 @@ def test_status_one_missing_service_exits_two(
     _install_print_service(
         monkeypatch,
         {
-            "com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1"),
-            "com.user.amc-backup": _loaded("com.user.amc-backup", pid="3"),
+            "com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1"),
+            "com.user.amg-backup": _loaded("com.user.amg-backup", pid="3"),
             # receiver intentionally absent -> _unloaded() fallback
         },
     )
@@ -450,7 +450,7 @@ def test_probe_process_start_returns_none_on_unparseable(
 def test_status_uptime_computed_from_ps(monkeypatch: pytest.MonkeyPatch) -> None:
     _install_print_service(
         monkeypatch,
-        {"com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="4242")},
+        {"com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="4242")},
     )
     _install_disabled_state(monkeypatch, {})
 
@@ -475,7 +475,7 @@ def test_run_status_direct_call_json(monkeypatch: pytest.MonkeyPatch) -> None:
     """Use the testable core directly with injected streams."""
     _install_print_service(
         monkeypatch,
-        {"com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1234")},
+        {"com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1234")},
     )
     _install_disabled_state(monkeypatch, {})
     _disable_ps_probe(monkeypatch)
@@ -494,7 +494,7 @@ def test_run_status_enabled_defaults_to_yes_when_label_absent(
     """A label missing from print-disabled is enabled by launchd default."""
     _install_print_service(
         monkeypatch,
-        {"com.user.amc-adapter": _loaded("com.user.amc-adapter", pid="1234")},
+        {"com.user.amg-adapter": _loaded("com.user.amg-adapter", pid="1234")},
     )
     _install_disabled_state(monkeypatch, {})  # empty
     _disable_ps_probe(monkeypatch)

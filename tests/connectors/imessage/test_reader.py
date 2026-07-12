@@ -1,7 +1,7 @@
-"""Tests for ``amc.connectors.imessage.reader.ChatDbReader``.
+"""Tests for ``amg.connectors.imessage.reader.ChatDbReader``.
 
 The reader is the inbound half of the iMessage path (spec §5.1
-REQ-AMC-001 + §7.5). These tests exercise it against the Phase 0
+REQ-AMG-001 + §7.5). These tests exercise it against the Phase 0
 fixture chat.db produced by ``tests/fixtures/build_chat_db.py``.
 
 Coverage map (acceptance criteria → test):
@@ -42,7 +42,7 @@ from pathlib import Path
 
 import pytest
 
-from amc.connectors.imessage.reader import (
+from amg.connectors.imessage.reader import (
     ChatDbPathMissingError,
     ChatDbReader,
     decode_attributed_body,
@@ -537,7 +537,7 @@ async def test_database_locked_logs_and_raises_for_caller_retry(
         reader._conn = _LockedConn(real)  # type: ignore[assignment,attr-defined]
 
         with (
-            caplog.at_level(logging.WARNING, logger="amc.connectors.imessage.reader"),
+            caplog.at_level(logging.WARNING, logger="amg.connectors.imessage.reader"),
             pytest.raises(sqlite3.OperationalError, match="locked"),
         ):
             await reader.fetch_new(last_seen_rowid=0)

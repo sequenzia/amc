@@ -1,7 +1,7 @@
 # iMessage Connector
 
-The iMessage connector bridges Apple Messages and AMC on a single Mac. It lives at
-`amc/connectors/imessage/` and is split into three modules:
+The iMessage connector bridges Apple Messages and AMG on a single Mac. It lives at
+`amg/connectors/imessage/` and is split into three modules:
 
 - `reader.py` — a read-only async reader over `~/Library/Messages/chat.db` (the **inbound** half).
 - `connector.py` — the background poller plus the outbound AppleScript driver wiring.
@@ -59,7 +59,7 @@ The starting cursor is resolved once at boot:
 - **Fresh install** — no cursor row. The cursor is seeded to `MAX(message.ROWID)` from `chat.db` so
   the entire historical backlog is **not** replayed as "new". The seed is in-memory only; it is
   persisted on the next inbound row's sink transaction.
-- **Cursor read failure** — the AMC DB is unreadable/corrupt. The connector logs an `ERROR` and
+- **Cursor read failure** — the AMG DB is unreadable/corrupt. The connector logs an `ERROR` and
   falls back to the fresh-install path (seed to `MAX(message.ROWID)`). This keeps the connector live
   on a transient hiccup; the next sink transaction heals the cursor row.
 
@@ -86,7 +86,7 @@ the connector falls back to `message.text` (which may itself be `None`).
 
 ## Handle normalization
 
-Each chat.db `handle.id` is normalized into the AMC channel/sender id:
+Each chat.db `handle.id` is normalized into the AMG channel/sender id:
 
 - **Email handles** (those containing `@`) are treated as Apple-ID emails and preserved.
 - **Phone handles** are stripped to digits and normalized to E.164:
@@ -181,7 +181,7 @@ attachment is sent; any surplus are dropped with a `WARN`.
 
 ## channel_id and chat_guid formats
 
-The AMC `channel_id` for an iMessage DM is the normalized handle with **no prefix** — either an
+The AMG `channel_id` for an iMessage DM is the normalized handle with **no prefix** — either an
 E.164 phone number (`+15551234567`) or an Apple-ID email. The macOS `chat.guid` that AppleScript
 needs to address the thread (for example `iMessage;-;+15551234567`) is a separate value, stored in
 `channels.metadata_json` by inbound rows and read back on send.

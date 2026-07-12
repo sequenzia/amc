@@ -34,10 +34,10 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amc.api.messages_context import router as context_router
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.errors import register_exception_handlers
+from amg.api.messages_context import router as context_router
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.errors import register_exception_handlers
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -79,7 +79,7 @@ UNKNOWN_MSG_ID = "msg_01HXYZAAAAAAAAAAAAAAAAAAAF"
 def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     path = tmp_path / "context.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(path))
+    monkeypatch.setenv("AMG_DB_PATH", str(path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     return path
@@ -449,7 +449,7 @@ class TestErrorHandling:
         assert resp.status_code == 401
         # ``require_bearer`` raises ``HTTPException(detail={"error": {...}})``;
         # the canonical flatten lives in :func:`register_exception_handlers`
-        # only for ``AMCError``, so the auth envelope still wraps under
+        # only for ``AMGError``, so the auth envelope still wraps under
         # ``detail`` (spec-conformant after task #27 re-translation, but
         # already correct in shape today).
         assert resp.json()["detail"]["error"]["code"] == "UNAUTHORIZED"

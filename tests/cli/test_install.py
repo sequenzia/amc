@@ -1,8 +1,8 @@
-"""Tests for ``amc install`` (spec §5.3).
+"""Tests for ``amg install`` (spec §5.3).
 
 Coverage:
-* Functional: ``amc install`` installs all three services in registry order.
-* Functional: ``amc install adapter receiver`` installs only those two.
+* Functional: ``amg install`` installs all three services in registry order.
+* Functional: ``amg install adapter receiver`` installs only those two.
 * Functional: already-bootstrapped service is bootout'd before bootstrap.
 * Functional: not-bootstrapped service is bootstrapped without a bootout call.
 * Functional: idempotent re-run produces the same plist bytes and re-runs
@@ -19,8 +19,8 @@ Coverage:
 * Per-service result lines: ``<name>: installed`` on success, ``<name>:
   failed`` on failure.
 
-We monkeypatch ``amc.cli.launchctl._run`` (the single subprocess seam in
-the launchctl module) and ``amc.cli.plist.subprocess.run`` (the seam in
+We monkeypatch ``amg.cli.launchctl._run`` (the single subprocess seam in
+the launchctl module) and ``amg.cli.plist.subprocess.run`` (the seam in
 the plist module) so the tests never shell out.
 """
 
@@ -36,8 +36,8 @@ from unittest.mock import patch
 import pytest
 from typer.testing import CliRunner
 
-from amc.cli.app import app
-from amc.cli.install import run_install
+from amg.cli.app import app
+from amg.cli.install import run_install
 
 runner = CliRunner()
 
@@ -65,7 +65,7 @@ def _seed_templates(install_dir: Path) -> None:
     """Materialize the plist templates the registry references.
 
     The service registry stores repo-relative paths like
-    ``ops/launchd/com.user.amc-adapter.plist``. ``run_install`` joins those
+    ``ops/launchd/com.user.amg-adapter.plist``. ``run_install`` joins those
     against ``install_dir`` and feeds the result to ``render_plist``. We
     seed all three templates under ``install_dir/ops/launchd/`` so the
     pipeline can read them.
@@ -73,9 +73,9 @@ def _seed_templates(install_dir: Path) -> None:
     target = install_dir / "ops" / "launchd"
     target.mkdir(parents=True, exist_ok=True)
     for label in (
-        "com.user.amc-adapter",
-        "com.user.amc-webhook-receiver",
-        "com.user.amc-backup",
+        "com.user.amg-adapter",
+        "com.user.amg-webhook-receiver",
+        "com.user.amg-backup",
     ):
         # ``__LABEL__`` is intentionally left in the body — it is *not* a
         # documented substitution placeholder, but it lets us assert the
@@ -87,7 +87,7 @@ def _seed_templates(install_dir: Path) -> None:
 
 
 class _LaunchctlRecorder:
-    """Recording fake for ``amc.cli.launchctl._run``.
+    """Recording fake for ``amg.cli.launchctl._run``.
 
     Builds a scriptable response table keyed on argv shape. Records every
     call's argv in the order it was made so tests can assert sequencing
@@ -107,7 +107,7 @@ class _LaunchctlRecorder:
 
     def set_print_loaded(self, label: str, loaded: bool) -> None:
         """Make ``launchctl print gui/<uid>/<label>`` succeed (loaded) or fail."""
-        from amc.cli.launchctl import DOMAIN
+        from amg.cli.launchctl import DOMAIN
 
         argv = ("launchctl", "print", f"{DOMAIN}/{label}")
         rc = 0 if loaded else 113
@@ -181,8 +181,8 @@ def test_install_all_three_services(tmp_path: Path) -> None:
     fake_run = _LaunchctlRecorder()
 
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         out = _CaptureStream()
         err = _CaptureStream()
@@ -193,9 +193,9 @@ def test_install_all_three_services(tmp_path: Path) -> None:
     # All three plists landed at ~/Library/LaunchAgents/.
     launch_agents = home / "Library" / "LaunchAgents"
     expected_files = {
-        "com.user.amc-adapter.plist",
-        "com.user.amc-webhook-receiver.plist",
-        "com.user.amc-backup.plist",
+        "com.user.amg-adapter.plist",
+        "com.user.amg-webhook-receiver.plist",
+        "com.user.amg-backup.plist",
     }
     on_disk = {p.name for p in launch_agents.iterdir()}
     assert expected_files <= on_disk
@@ -226,8 +226,8 @@ def test_install_subset_only(tmp_path: Path) -> None:
     fake_run = _LaunchctlRecorder()
 
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         out = _CaptureStream()
         err = _CaptureStream()
@@ -238,9 +238,9 @@ def test_install_subset_only(tmp_path: Path) -> None:
     assert code == 0
     launch_agents = home / "Library" / "LaunchAgents"
     on_disk = {p.name for p in launch_agents.iterdir()}
-    assert "com.user.amc-adapter.plist" in on_disk
-    assert "com.user.amc-webhook-receiver.plist" in on_disk
-    assert "com.user.amc-backup.plist" not in on_disk
+    assert "com.user.amg-adapter.plist" in on_disk
+    assert "com.user.amg-webhook-receiver.plist" in on_disk
+    assert "com.user.amg-backup.plist" not in on_disk
     out_text = out.getvalue()
     assert "adapter: installed" in out_text
     assert "receiver: installed" in out_text
@@ -256,16 +256,16 @@ def test_install_bootout_when_already_bootstrapped(tmp_path: Path) -> None:
 
     fake_run = _LaunchctlRecorder()
     # Mark the adapter as already loaded so install_one bootouts first.
-    fake_run.set_print_loaded("com.user.amc-adapter", True)
+    fake_run.set_print_loaded("com.user.amg-adapter", True)
 
     captured: list[list[str]] = []
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
         # The async-bootout settle wait polls print_service; stub it out so
         # this test asserts the bare verb sequence (settle is covered by its
         # own dedicated test below).
-        patch("amc.cli.install._settle_after_bootout"),
+        patch("amg.cli.install._settle_after_bootout"),
     ):
         code = run_install(
             ["adapter"],
@@ -278,7 +278,7 @@ def test_install_bootout_when_already_bootstrapped(tmp_path: Path) -> None:
     assert code == 0
 
     # Filter to just the adapter's launchctl calls.
-    adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
+    adapter_calls = [c for c in fake_run.calls if "com.user.amg-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
     # Expected order: print → bootout → enable → bootstrap.
     assert verbs == ["print", "bootout", "enable", "bootstrap"]
@@ -296,8 +296,8 @@ def test_install_skips_bootout_when_not_bootstrapped(tmp_path: Path) -> None:
 
     captured: list[list[str]] = []
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         code = run_install(
             ["adapter"],
@@ -308,7 +308,7 @@ def test_install_skips_bootout_when_not_bootstrapped(tmp_path: Path) -> None:
         )
 
     assert code == 0
-    adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
+    adapter_calls = [c for c in fake_run.calls if "com.user.amg-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
     # No bootout in the sequence — service wasn't loaded.
     assert verbs == ["print", "enable", "bootstrap"]
@@ -326,8 +326,8 @@ def test_install_idempotent_second_run(tmp_path: Path) -> None:
 
     # First run: nothing loaded.
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         code1 = run_install(
             ["adapter"],
@@ -337,20 +337,20 @@ def test_install_idempotent_second_run(tmp_path: Path) -> None:
             err=_CaptureStream(),
         )
     assert code1 == 0
-    dest = home / "Library" / "LaunchAgents" / "com.user.amc-adapter.plist"
+    dest = home / "Library" / "LaunchAgents" / "com.user.amg-adapter.plist"
     first_bytes = dest.read_bytes()
 
     # Second run: now mark as loaded; expect bootout this time.
-    fake_run.set_print_loaded("com.user.amc-adapter", True)
+    fake_run.set_print_loaded("com.user.amg-adapter", True)
     fake_run.calls.clear()
     captured.clear()
 
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
         # Stub the async-bootout settle wait; it polls print_service and
         # would otherwise add poll calls to the recorded verb sequence.
-        patch("amc.cli.install._settle_after_bootout"),
+        patch("amg.cli.install._settle_after_bootout"),
     ):
         code2 = run_install(
             ["adapter"],
@@ -364,7 +364,7 @@ def test_install_idempotent_second_run(tmp_path: Path) -> None:
     # Idempotent on disk: same bytes after re-render.
     assert first_bytes == second_bytes
     # Idempotent on launchctl: bootout → enable → bootstrap runs again.
-    adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
+    adapter_calls = [c for c in fake_run.calls if "com.user.amg-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
     assert verbs == ["print", "bootout", "enable", "bootstrap"]
 
@@ -387,8 +387,8 @@ def test_install_creates_launch_agents_dir_with_mode_700(tmp_path: Path) -> None
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         code = run_install(
             ["adapter"],
@@ -413,15 +413,15 @@ def test_install_overwrites_existing_plist_with_unknown_contents(
     install_dir.mkdir()
     _seed_templates(install_dir)
 
-    dest = home / "Library" / "LaunchAgents" / "com.user.amc-adapter.plist"
+    dest = home / "Library" / "LaunchAgents" / "com.user.amg-adapter.plist"
     dest.parent.mkdir(parents=True)
     dest.write_text("LEGACY DO NOT KEEP", encoding="utf-8")
 
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         code = run_install(
             ["adapter"],
@@ -434,7 +434,7 @@ def test_install_overwrites_existing_plist_with_unknown_contents(
     assert code == 0
     new_contents = dest.read_text(encoding="utf-8")
     assert "LEGACY" not in new_contents
-    assert "com.user.amc-adapter" in new_contents
+    assert "com.user.amg-adapter" in new_contents
 
 
 def test_install_existing_plist_but_service_not_bootstrapped(tmp_path: Path) -> None:
@@ -445,15 +445,15 @@ def test_install_existing_plist_but_service_not_bootstrapped(tmp_path: Path) -> 
     _seed_templates(install_dir)
 
     # Plist exists but launchctl print returns "not loaded" (default 113).
-    dest = home / "Library" / "LaunchAgents" / "com.user.amc-adapter.plist"
+    dest = home / "Library" / "LaunchAgents" / "com.user.amg-adapter.plist"
     dest.parent.mkdir(parents=True)
     dest.write_text("OLD", encoding="utf-8")
 
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         code = run_install(
             ["adapter"],
@@ -466,7 +466,7 @@ def test_install_existing_plist_but_service_not_bootstrapped(tmp_path: Path) -> 
     assert code == 0
     # No bootout call — service wasn't loaded — but enable + bootstrap
     # still ran cleanly against the freshly-rewritten plist.
-    adapter_calls = [c for c in fake_run.calls if "com.user.amc-adapter" in " ".join(c)]
+    adapter_calls = [c for c in fake_run.calls if "com.user.amg-adapter" in " ".join(c)]
     verbs = [c[1] for c in adapter_calls]
     assert verbs == ["print", "enable", "bootstrap"]
 
@@ -486,8 +486,8 @@ def test_install_plutil_lint_failure_exits_two_keeps_tmpfile(tmp_path: Path) -> 
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_fail(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_fail(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         err = _CaptureStream()
         code = run_install(
@@ -529,10 +529,10 @@ def test_install_launch_agents_not_writable_exits_three(tmp_path: Path) -> None:
         fake_run = _LaunchctlRecorder()
         with (
             patch(
-                "amc.cli.plist.subprocess.run",
+                "amg.cli.plist.subprocess.run",
                 side_effect=_fake_plutil_lint_ok(captured),
             ),
-            patch("amc.cli.launchctl._run", side_effect=fake_run),
+            patch("amg.cli.launchctl._run", side_effect=fake_run),
         ):
             err = _CaptureStream()
             code = run_install(
@@ -566,8 +566,8 @@ def test_install_launchctl_failure_exits_two(verb: str, tmp_path: Path) -> None:
     captured: list[list[str]] = []
 
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         out = _CaptureStream()
         err = _CaptureStream()
@@ -593,14 +593,14 @@ def test_install_bootout_failure_exits_two(tmp_path: Path) -> None:
 
     fake_run = _LaunchctlRecorder()
     # Make it look loaded so we attempt bootout.
-    fake_run.set_print_loaded("com.user.amc-adapter", True)
+    fake_run.set_print_loaded("com.user.amg-adapter", True)
     # bootout returns a non-noop failure code (anything other than 0, 3, 113).
     fake_run.set_verb_returncode("bootout", 5, stderr="bootout died")
     captured: list[list[str]] = []
 
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         out = _CaptureStream()
         err = _CaptureStream()
@@ -629,8 +629,8 @@ def test_settle_after_bootout_polls_until_unloaded() -> None:
     the service is still loaded and stop on the first ``loaded=False``,
     sleeping between checks but never after the final one.
     """
-    from amc.cli import install as install_mod
-    from amc.cli.launchctl import PrintResult
+    from amg.cli import install as install_mod
+    from amg.cli.launchctl import PrintResult
 
     # Loaded for the first two checks, then torn down.
     states = iter([True, True, False])
@@ -643,8 +643,8 @@ def test_settle_after_bootout_polls_until_unloaded() -> None:
     def fake_sleep(_seconds: float) -> None:
         counts["sleep"] += 1
 
-    with patch("amc.cli.install.print_service", side_effect=fake_print):
-        install_mod._settle_after_bootout("com.user.amc-adapter", sleep=fake_sleep)
+    with patch("amg.cli.install.print_service", side_effect=fake_print):
+        install_mod._settle_after_bootout("com.user.amg-adapter", sleep=fake_sleep)
 
     # Stopped on the 3rd check (first unloaded); slept twice between checks.
     assert counts["print"] == 3
@@ -656,10 +656,10 @@ def test_settle_after_bootout_is_bounded() -> None:
 
     The wait is best-effort: when the bound is exhausted it returns and
     lets the subsequent ``bootstrap`` surface the real error rather than
-    blocking ``amc install`` forever.
+    blocking ``amg install`` forever.
     """
-    from amc.cli import install as install_mod
-    from amc.cli.launchctl import PrintResult
+    from amg.cli import install as install_mod
+    from amg.cli.launchctl import PrintResult
 
     counts = {"print": 0, "sleep": 0}
 
@@ -670,8 +670,8 @@ def test_settle_after_bootout_is_bounded() -> None:
     def fake_sleep(_seconds: float) -> None:
         counts["sleep"] += 1
 
-    with patch("amc.cli.install.print_service", side_effect=always_loaded):
-        install_mod._settle_after_bootout("com.user.amc-adapter", sleep=fake_sleep)
+    with patch("amg.cli.install.print_service", side_effect=always_loaded):
+        install_mod._settle_after_bootout("com.user.amg-adapter", sleep=fake_sleep)
 
     # Bounded: exactly _BOOTOUT_SETTLE_ATTEMPTS checks, one fewer sleep
     # (no sleep follows the final check).
@@ -689,13 +689,13 @@ def test_install_mixed_targets_aggregate_max_code(tmp_path: Path) -> None:
 
     fake_run = _LaunchctlRecorder()
     # Fail bootstrap only for the receiver.
-    from amc.cli.launchctl import DOMAIN
+    from amg.cli.launchctl import DOMAIN
 
     receiver_bootstrap_argv = (
         "launchctl",
         "bootstrap",
         DOMAIN,
-        str(home / "Library" / "LaunchAgents" / "com.user.amc-webhook-receiver.plist"),
+        str(home / "Library" / "LaunchAgents" / "com.user.amg-webhook-receiver.plist"),
     )
     fake_run._responses[receiver_bootstrap_argv] = subprocess.CompletedProcess(
         args=list(receiver_bootstrap_argv),
@@ -706,8 +706,8 @@ def test_install_mixed_targets_aggregate_max_code(tmp_path: Path) -> None:
 
     captured: list[list[str]] = []
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         out = _CaptureStream()
         err = _CaptureStream()
@@ -735,8 +735,8 @@ def test_install_unknown_service_exits_one(tmp_path: Path) -> None:
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         err = _CaptureStream()
         code = run_install(
@@ -756,7 +756,7 @@ def test_install_unknown_service_exits_one(tmp_path: Path) -> None:
 
 
 def test_cli_install_invokes_run_install(monkeypatch: Any, tmp_path: Path) -> None:
-    """``amc install`` end-to-end via CliRunner: dispatches to run_install."""
+    """``amg install`` end-to-end via CliRunner: dispatches to run_install."""
     home = tmp_path / "home"
     home.mkdir()
     install_dir = tmp_path / "repo"
@@ -768,15 +768,15 @@ def test_cli_install_invokes_run_install(monkeypatch: Any, tmp_path: Path) -> No
 
     # Stash the install_dir at module import time so the real
     # _REPO_ROOT is overridden for this test.
-    import amc.cli.install as install_mod
+    import amg.cli.install as install_mod
 
     monkeypatch.setattr(install_mod, "_REPO_ROOT", install_dir)
 
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         result = runner.invoke(app, ["install", "adapter"])
 
@@ -792,15 +792,15 @@ def test_cli_install_no_args_means_all(monkeypatch: Any, tmp_path: Path) -> None
     _seed_templates(install_dir)
     monkeypatch.setenv("HOME", str(home))
 
-    import amc.cli.install as install_mod
+    import amg.cli.install as install_mod
 
     monkeypatch.setattr(install_mod, "_REPO_ROOT", install_dir)
 
     captured: list[list[str]] = []
     fake_run = _LaunchctlRecorder()
     with (
-        patch("amc.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
-        patch("amc.cli.launchctl._run", side_effect=fake_run),
+        patch("amg.cli.plist.subprocess.run", side_effect=_fake_plutil_lint_ok(captured)),
+        patch("amg.cli.launchctl._run", side_effect=fake_run),
     ):
         result = runner.invoke(app, ["install"])
 

@@ -35,7 +35,7 @@ import yarl
 from discord.gateway import DiscordWebSocket
 from discord.http import DiscordClientWebSocketResponse
 
-from amc.connectors.imessage.applescript import AppleScriptSender, SendResult
+from amg.connectors.imessage.applescript import AppleScriptSender, SendResult
 from tests.fakes.applescript import FakeAppleScriptSender
 from tests.fakes.discord_gateway import FakeDiscordGateway
 from tests.fakes.discord_rest import FakeDiscordRest, make_test_channel

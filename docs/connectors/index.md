@@ -1,6 +1,6 @@
 # Connectors — Overview
 
-A **connector** is the single platform-specific component in AMC. Its one job has two directions:
+A **connector** is the single platform-specific component in AMG. Its one job has two directions:
 
 - **Inbound** — turn raw platform events (a new iMessage row, a Discord gateway message) into the normalized [message envelope](../architecture/message-envelope.md) and hand it to the adapter.
 - **Outbound** — turn an adapter send request into a concrete platform action (an AppleScript send, a Discord REST call).
@@ -53,9 +53,9 @@ The signatures are real: `degraded` is a plain `bool` attribute the connector se
 
 ## Lifecycle & conditional start
 
-Connectors are started inside the adapter's FastAPI **lifespan** (`amc/app.py`). Each one starts only when its preconditions are met:
+Connectors are started inside the adapter's FastAPI **lifespan** (`amg/app.py`). Each one starts only when its preconditions are met:
 
-- **Discord** starts only if `AMC_DISCORD_BOT_TOKEN` is set. It runs as an `asyncio` task (`discord_connector.start(token)`).
+- **Discord** starts only if `AMG_DISCORD_BOT_TOKEN` is set. It runs as an `asyncio` task (`discord_connector.start(token)`).
 - **iMessage** starts only on macOS (`sys.platform == "darwin"`) when `~/Library/Messages/chat.db` exists and is readable. A missing path raises `ChatDbPathMissingError` and the connector is skipped.
 
 Each connector that successfully starts registers itself:

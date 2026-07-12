@@ -1,4 +1,4 @@
-"""Tests for :mod:`amc.cli.launchctl`.
+"""Tests for :mod:`amg.cli.launchctl`.
 
 Spec references:
 * §5.5 Lifecycle — exact ``launchctl`` argv per verb (start/stop/restart/
@@ -10,7 +10,7 @@ Spec references:
   ``shell=True``); asserted by checking the captured argv shape.
 
 Strategy:
-* Patch ``amc.cli.launchctl._run`` to inject canned
+* Patch ``amg.cli.launchctl._run`` to inject canned
   :class:`subprocess.CompletedProcess` results. This is the only function
   in the module that touches :mod:`subprocess`, and patching it gives the
   tests deterministic stdout/stderr/returncode triples without spinning up
@@ -31,7 +31,7 @@ from collections.abc import Callable
 
 import pytest
 
-from amc.cli import launchctl
+from amg.cli import launchctl
 
 # Local alias avoids the Yoda-condition lint when asserting equality
 # against the module's import-time constant in
@@ -108,9 +108,9 @@ def test_kickstart_argv_no_restart(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    result = launchctl.kickstart("com.user.amc-adapter")
+    result = launchctl.kickstart("com.user.amg-adapter")
 
-    assert captured == [["launchctl", "kickstart", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "kickstart", _expected_target("com.user.amg-adapter")]]
     assert result.ok is True
     assert result.returncode == 0
     assert result.argv == tuple(captured[0])
@@ -123,9 +123,9 @@ def test_kickstart_argv_with_restart_inserts_dash_k(
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    launchctl.kickstart("com.user.amc-adapter", restart=True)
+    launchctl.kickstart("com.user.amg-adapter", restart=True)
 
-    assert captured == [["launchctl", "kickstart", "-k", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "kickstart", "-k", _expected_target("com.user.amg-adapter")]]
 
 
 def test_bootstrap_uses_domain_plus_plist_path(
@@ -140,8 +140,8 @@ def test_bootstrap_uses_domain_plus_plist_path(
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
     launchctl.bootstrap(
-        "com.user.amc-adapter",
-        "/Users/op/Library/LaunchAgents/com.user.amc-adapter.plist",
+        "com.user.amg-adapter",
+        "/Users/op/Library/LaunchAgents/com.user.amg-adapter.plist",
     )
 
     assert captured == [
@@ -149,7 +149,7 @@ def test_bootstrap_uses_domain_plus_plist_path(
             "launchctl",
             "bootstrap",
             _expected_domain(),
-            "/Users/op/Library/LaunchAgents/com.user.amc-adapter.plist",
+            "/Users/op/Library/LaunchAgents/com.user.amg-adapter.plist",
         ]
     ]
 
@@ -159,9 +159,9 @@ def test_bootout_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    launchctl.bootout("com.user.amc-adapter")
+    launchctl.bootout("com.user.amg-adapter")
 
-    assert captured == [["launchctl", "bootout", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "bootout", _expected_target("com.user.amg-adapter")]]
 
 
 def test_enable_argv(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -169,9 +169,9 @@ def test_enable_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    launchctl.enable("com.user.amc-adapter")
+    launchctl.enable("com.user.amg-adapter")
 
-    assert captured == [["launchctl", "enable", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "enable", _expected_target("com.user.amg-adapter")]]
 
 
 def test_disable_argv(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -179,9 +179,9 @@ def test_disable_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    launchctl.disable("com.user.amc-adapter")
+    launchctl.disable("com.user.amg-adapter")
 
-    assert captured == [["launchctl", "disable", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "disable", _expected_target("com.user.amg-adapter")]]
 
 
 def test_kill_sigterm_argv(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -193,9 +193,9 @@ def test_kill_sigterm_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    launchctl.kill_sigterm("com.user.amc-adapter")
+    launchctl.kill_sigterm("com.user.amg-adapter")
 
-    assert captured == [["launchctl", "kill", "SIGTERM", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "kill", "SIGTERM", _expected_target("com.user.amg-adapter")]]
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +217,7 @@ def test_completed_result_captures_returncode_and_stderr(
         _make_fake_run(returncode=1, stderr="Load failed: 5: Input/output error\n"),
     )
 
-    result = launchctl.kickstart("com.user.amc-adapter")
+    result = launchctl.kickstart("com.user.amg-adapter")
 
     assert result.ok is False
     assert result.returncode == 1
@@ -230,7 +230,7 @@ def test_completed_result_argv_is_tuple_for_immutability(
     """``CompletedResult.argv`` is a tuple so callers cannot mutate it."""
     monkeypatch.setattr(launchctl, "_run", _make_fake_run())
 
-    result = launchctl.enable("com.user.amc-adapter")
+    result = launchctl.enable("com.user.amg-adapter")
 
     assert isinstance(result.argv, tuple)
 
@@ -256,7 +256,7 @@ def test_bootout_tolerates_not_bootstrapped_exit_codes(
         _make_fake_run(returncode=rc, stderr="Boot-out failed: 3: No such process\n"),
     )
 
-    result = launchctl.bootout("com.user.amc-adapter")
+    result = launchctl.bootout("com.user.amg-adapter")
 
     assert result.ok is True
     # The underlying returncode is preserved for diagnostics — only the
@@ -275,7 +275,7 @@ def test_bootout_with_real_failure_returns_not_ok(
         _make_fake_run(returncode=5, stderr="Boot-out failed: 5: I/O error\n"),
     )
 
-    result = launchctl.bootout("com.user.amc-adapter")
+    result = launchctl.bootout("com.user.amg-adapter")
 
     assert result.ok is False
     assert result.returncode == 5
@@ -285,7 +285,7 @@ def test_bootout_success_returns_ok(monkeypatch: pytest.MonkeyPatch) -> None:
     """Zero exit code → ``ok=True`` (the common path)."""
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(returncode=0))
 
-    result = launchctl.bootout("com.user.amc-adapter")
+    result = launchctl.bootout("com.user.amg-adapter")
 
     assert result.ok is True
     assert result.returncode == 0
@@ -300,9 +300,9 @@ def test_bootout_success_returns_ok(monkeypatch: pytest.MonkeyPatch) -> None:
 # loaded, running service. Indentation matches what launchctl emits (one
 # leading TAB).
 _PRINT_OUT_RUNNING = """\
-com.user.amc-adapter = {
+com.user.amg-adapter = {
 \tactive count = 1
-\tpath = /Users/op/Library/LaunchAgents/com.user.amc-adapter.plist
+\tpath = /Users/op/Library/LaunchAgents/com.user.amg-adapter.plist
 \ttype = LaunchAgent
 \tstate = running
 \tprogram = /Users/op/repo/ops/launchd/run-adapter.sh
@@ -318,9 +318,9 @@ com.user.amc-adapter = {
 # launched. launchctl emits ``last exit code = (never exited)`` literally;
 # ``pid`` is absent because no process is running.
 _PRINT_OUT_NEVER_RUN = """\
-com.user.amc-adapter = {
+com.user.amg-adapter = {
 \tactive count = 0
-\tpath = /Users/op/Library/LaunchAgents/com.user.amc-adapter.plist
+\tpath = /Users/op/Library/LaunchAgents/com.user.amg-adapter.plist
 \ttype = LaunchAgent
 \tstate = not running
 \truns = 0
@@ -331,7 +331,7 @@ com.user.amc-adapter = {
 
 # launchctl's error output when the service is not in the domain.
 _PRINT_STDERR_NOT_LOADED = (
-    'Could not find service "com.user.amc-adapter" in domain for user gui: 502\n'
+    'Could not find service "com.user.amg-adapter" in domain for user gui: 502\n'
 )
 
 
@@ -341,7 +341,7 @@ def test_print_service_running_extracts_pid_state_and_last_exit(
     """All three promoted fields parse cleanly for a running service."""
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(returncode=0, stdout=_PRINT_OUT_RUNNING))
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.loaded is True
     assert result.returncode == 0
@@ -351,9 +351,9 @@ def test_print_service_running_extracts_pid_state_and_last_exit(
     # start_time has no analogue in current launchctl output and is left
     # at its default ``"-"`` sentinel.
     assert result.start_time == "-"
-    # The raw fields dict is exposed for ``amc doctor`` and similar
+    # The raw fields dict is exposed for ``amg doctor`` and similar
     # introspection tools.
-    assert result.fields["path"].endswith("com.user.amc-adapter.plist")
+    assert result.fields["path"].endswith("com.user.amg-adapter.plist")
 
 
 def test_print_service_never_run_maps_to_dash_defaults(
@@ -364,7 +364,7 @@ def test_print_service_never_run_maps_to_dash_defaults(
         launchctl, "_run", _make_fake_run(returncode=0, stdout=_PRINT_OUT_NEVER_RUN)
     )
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.loaded is True
     assert result.pid == "-"
@@ -386,7 +386,7 @@ def test_print_service_not_loaded_returns_loaded_false_and_dash_fields(
         _make_fake_run(returncode=113, stderr=_PRINT_STDERR_NOT_LOADED),
     )
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.loaded is False
     assert result.returncode == 113
@@ -394,8 +394,8 @@ def test_print_service_not_loaded_returns_loaded_false_and_dash_fields(
     assert result.last_exit == "-"
     assert result.state == "-"
     assert result.start_time == "-"
-    # stderr is preserved for the caller (``amc status`` may surface it on
-    # request, or ``amc doctor`` may include it in diagnostics).
+    # stderr is preserved for the caller (``amg status`` may surface it on
+    # request, or ``amg doctor`` may include it in diagnostics).
     assert "Could not find service" in result.raw_stderr
 
 
@@ -406,9 +406,9 @@ def test_print_service_invokes_correct_argv(
     captured: list[list[str]] = []
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(captured_argv=captured))
 
-    launchctl.print_service("com.user.amc-adapter")
+    launchctl.print_service("com.user.amg-adapter")
 
-    assert captured == [["launchctl", "print", _expected_target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "print", _expected_target("com.user.amg-adapter")]]
 
 
 def test_print_service_malformed_pid_becomes_unknown(
@@ -420,7 +420,7 @@ def test_print_service_malformed_pid_becomes_unknown(
     ``unknown``; CLI does not crash.
     """
     malformed = (
-        "com.user.amc-adapter = {\n"
+        "com.user.amg-adapter = {\n"
         "\tstate = running\n"
         "\tpid = not-a-number\n"
         "\tlast exit code = 0\n"
@@ -428,7 +428,7 @@ def test_print_service_malformed_pid_becomes_unknown(
     )
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(stdout=malformed))
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.loaded is True
     assert result.pid == "unknown"
@@ -443,11 +443,11 @@ def test_print_service_malformed_last_exit_becomes_unknown(
 ) -> None:
     """A non-integer ``last exit code`` value → ``"unknown"``."""
     malformed = (
-        "com.user.amc-adapter = {\n\tstate = running\n\tpid = 12345\n\tlast exit code = banana\n}\n"
+        "com.user.amg-adapter = {\n\tstate = running\n\tpid = 12345\n\tlast exit code = banana\n}\n"
     )
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(stdout=malformed))
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.last_exit == "unknown"
 
@@ -456,10 +456,10 @@ def test_print_service_signed_last_exit_passes_through(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Negative exit codes (signal kills) are preserved verbatim."""
-    text = "com.user.amc-adapter = {\n\tstate = not running\n\tlast exit code = -9\n}\n"
+    text = "com.user.amg-adapter = {\n\tstate = not running\n\tlast exit code = -9\n}\n"
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(stdout=text))
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.last_exit == "-9"
 
@@ -479,7 +479,7 @@ def test_print_service_parser_never_raises_on_garbage(
     )
 
     # Must not raise.
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.loaded is True
     # No recognizable fields → defaults preserved.
@@ -499,7 +499,7 @@ def test_print_service_with_start_time_field_populates(
     available.
     """
     text = (
-        "com.user.amc-adapter = {\n"
+        "com.user.amg-adapter = {\n"
         "\tstate = running\n"
         "\tpid = 12345\n"
         "\tstart time = 2026-05-10 09:00:00\n"
@@ -508,7 +508,7 @@ def test_print_service_with_start_time_field_populates(
     )
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(stdout=text))
 
-    result = launchctl.print_service("com.user.amc-adapter")
+    result = launchctl.print_service("com.user.amg-adapter")
 
     assert result.start_time == "2026-05-10 09:00:00"
 
@@ -521,8 +521,8 @@ def test_print_service_with_start_time_field_populates(
 _PRINT_DISABLED_OUT = """\
 com.apple.xpc.launchd.user.domain.501.100002.gui = {
 \tdisabled services = {
-\t\t"com.user.amc-adapter" => enabled
-\t\t"com.user.amc-webhook-receiver" => disabled
+\t\t"com.user.amg-adapter" => enabled
+\t\t"com.user.amg-webhook-receiver" => disabled
 \t\t"com.apple.foo" => enabled
 \t}
 }
@@ -538,8 +538,8 @@ def test_print_disabled_state_parses_disabled_services_block(
     state = launchctl.print_disabled_state()
 
     assert state == {
-        "com.user.amc-adapter": True,
-        "com.user.amc-webhook-receiver": False,
+        "com.user.amg-adapter": True,
+        "com.user.amg-webhook-receiver": False,
         "com.apple.foo": True,
     }
 
@@ -560,8 +560,8 @@ def test_print_disabled_state_accepts_single_quoted_labels(
     """Some launchctl versions emit single-quoted labels in this block."""
     text = (
         "disabled services = {\n"
-        "\t'com.user.amc-adapter' => enabled\n"
-        "\t'com.user.amc-webhook-receiver' => disabled\n"
+        "\t'com.user.amg-adapter' => enabled\n"
+        "\t'com.user.amg-webhook-receiver' => disabled\n"
         "}\n"
     )
     monkeypatch.setattr(launchctl, "_run", _make_fake_run(stdout=text))
@@ -569,8 +569,8 @@ def test_print_disabled_state_accepts_single_quoted_labels(
     state = launchctl.print_disabled_state()
 
     assert state == {
-        "com.user.amc-adapter": True,
-        "com.user.amc-webhook-receiver": False,
+        "com.user.amg-adapter": True,
+        "com.user.amg-webhook-receiver": False,
     }
 
 
@@ -599,11 +599,11 @@ def test_print_disabled_state_returns_partial_on_nonzero_exit(
         "_run",
         _make_fake_run(
             returncode=2,
-            stdout=('disabled services = {\n\t"com.user.amc-adapter" => disabled\n}\n'),
+            stdout=('disabled services = {\n\t"com.user.amg-adapter" => disabled\n}\n'),
             stderr="some launchd warning\n",
         ),
     )
 
     state = launchctl.print_disabled_state()
 
-    assert state == {"com.user.amc-adapter": False}
+    assert state == {"com.user.amg-adapter": False}

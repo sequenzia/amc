@@ -1,10 +1,10 @@
-site_name: Agent Messaging Channel (AMC)
+site_name: Agent Messaging Gateway (AMG)
 site_description: >-
-  Agent Messaging Channel — a single-Mac service that exposes one AI agent on
+  Agent Messaging Gateway — a single-Mac service that exposes one AI agent on
   iMessage and Discord behind a unified MCP + REST surface.
-site_url: https://sequenzia.github.io/amc/
-repo_url: https://github.com/sequenzia/amc
-repo_name: sequenzia/amc
+site_url: https://sequenzia.github.io/amg/
+repo_url: https://github.com/sequenzia/amg
+repo_name: sequenzia/amg
 edit_uri: edit/main/docs/
 
 theme:
@@ -73,7 +73,7 @@ nav:
       - REST API: reference/rest-api.md
       - MCP Tools: reference/mcp-tools.md
       - Configuration: reference/configuration.md
-      - amc CLI: reference/cli.md
+      - amg CLI: reference/cli.md
   - Operations:
       - Overview: operations/index.md
       - Runbook: operations/runbook.md

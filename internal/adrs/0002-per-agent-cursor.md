@@ -9,7 +9,7 @@ The blueprint originally modeled "read" as a `read_at TIMESTAMP` column directly
 
 Two forces broke that simplicity during Phase 1 design:
 
-1. **REQ-AMC-003 (per-agent cursors).** The spec requires that two MCP-using agents polling the same adapter each see their own independent unread queue. With a single `read_at` column, whichever agent calls `mark_read` first silently marks the message read for **every** other agent — there is no per-agent dimension to that column.
+1. **REQ-AMG-003 (per-agent cursors).** The spec requires that two MCP-using agents polling the same adapter each see their own independent unread queue. With a single `read_at` column, whichever agent calls `mark_read` first silently marks the message read for **every** other agent — there is no per-agent dimension to that column.
 2. **`X-Agent-ID` is already a first-class header on every MCP request** (§7.4.2). The adapter can identify the calling agent for free at request time. There is no privilege barrier to maintaining per-agent state — it just needs a place to live.
 
 Two viable designs exist:
@@ -63,16 +63,16 @@ The blueprint's §5.3 has been reconciled to this shape; this ADR captures the r
 
 ## Alternatives considered
 
-- **Single `read_at` column on `messages` (original blueprint).** Rejected — fails REQ-AMC-003 outright. Only works for a single-agent deployment.
+- **Single `read_at` column on `messages` (original blueprint).** Rejected — fails REQ-AMG-003 outright. Only works for a single-agent deployment.
 - **`agent_id` column added to `messages`.** Rejected — collapses to N copies of every message row, one per agent that has seen it. Worse than Schema B at every dimension.
-- **Leasing model.** Rejected — adds a sweeper, expiry semantics, and head-of-line blocking. Solves a problem (cooperative work distribution) AMC v1 does not have.
+- **Leasing model.** Rejected — adds a sweeper, expiry semantics, and head-of-line blocking. Solves a problem (cooperative work distribution) AMG v1 does not have.
 - **Bitmap-per-message.** A `read_by BIGINT` bitmap with one bit per registered agent would compact storage, but requires an agent registry and breaks the "agents are anonymous, identified only by header" contract. Rejected.
 
 ## References
 
 - Blueprint §5.3 — reconciled storage schema
 - Blueprint §9 — the (now-resolved) "Multi-agent contention" open question
-- Spec §5.3 — REQ-AMC-003 (read state per agent)
+- Spec §5.3 — REQ-AMG-003 (read state per agent)
 - Spec §7.3.2 / §7.3.3 — `messages` and `message_reads` table definitions
 - `internal/notes/oq-1-decision.md` — `marked_count` semantics on `mark_read`
 - ADR 0006 — MCP stdio-only (means the typical deployment is one agent per stdio child, but the schema does not assume that)

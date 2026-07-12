@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.sweepers`` (spec §10.5 idempotency + attachment sweepers).
+"""Tests for ``amg.core.sweepers`` (spec §10.5 idempotency + attachment sweepers).
 
 Coverage:
 
@@ -53,8 +53,8 @@ from alembic.config import Config
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.sweepers import (
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.sweepers import (
     DEFAULT_ATTACHMENT_RETENTION_DAYS,
     DEFAULT_ATTACHMENT_SWEEP_INTERVAL_SECONDS,
     DEFAULT_SWEEP_INTERVAL_SECONDS,
@@ -69,7 +69,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
 # Same canonical ISO format the production code writes (millisecond precision,
-# trailing 'Z'). Picked to match ``amc.core.idempotency._format_ts`` so seeded
+# trailing 'Z'). Picked to match ``amg.core.idempotency._format_ts`` so seeded
 # rows sort identically to live writes.
 _ISO_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
@@ -104,7 +104,7 @@ def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
 
     path = tmp_path / "sweeper.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(path))
+    monkeypatch.setenv("AMG_DB_PATH", str(path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     return path
@@ -407,7 +407,7 @@ class TestIdempotencySweeper:
             logger_factory=structlog.stdlib.LoggerFactory(),
         )
         try:
-            with caplog.at_level(logging.INFO, logger="amc.sweepers"):
+            with caplog.at_level(logging.INFO, logger="amg.sweepers"):
                 deleted = await sweeper.tick()
         finally:
             structlog.reset_defaults()
@@ -847,7 +847,7 @@ class TestSweepAttachments:
         # depend on test-order-sensitive structlog-to-stdlib bridging
         # (the lazy proxy binds at first use; resetting defaults does not
         # rebind already-bound loggers).
-        from amc.core import sweepers as sweepers_mod
+        from amg.core import sweepers as sweepers_mod
 
         with patch.object(sweepers_mod._log, "warning") as mock_warning:
             async with session_factory() as session:
@@ -891,10 +891,10 @@ class TestSweepAttachments:
         def _denied(*_args: object, **_kwargs: object) -> None:
             raise PermissionError("operation not permitted")
 
-        from amc.core import sweepers as sweepers_mod
+        from amg.core import sweepers as sweepers_mod
 
         with (
-            patch("amc.core.sweepers.os.unlink", side_effect=_denied),
+            patch("amg.core.sweepers.os.unlink", side_effect=_denied),
             patch.object(sweepers_mod._log, "error") as mock_error,
         ):
             async with session_factory() as session:
@@ -951,7 +951,7 @@ class TestSweepAttachments:
                 raise PermissionError("locked")
             real_unlink(path)
 
-        with patch("amc.core.sweepers.os.unlink", side_effect=_selective):
+        with patch("amg.core.sweepers.os.unlink", side_effect=_selective):
             async with session_factory() as session:
                 deleted, skipped = await sweep_attachments(
                     session,
@@ -1054,7 +1054,7 @@ class TestSweepIntegratesWithReadPath:
     ) -> None:
         """After sweep, ``_load_attachment`` returns ``None`` (→ 404 in route)."""
 
-        from amc.api.attachments_get import _load_attachment
+        from amg.api.attachments_get import _load_attachment
 
         await _seed_message_chain(session_factory)
         att_id = "att_INTEG000000000000000000000"
@@ -1153,7 +1153,7 @@ class TestAttachmentSweeper:
 
         # Spy on the module-level structlog logger (avoids test-order
         # sensitivity from structlog's lazy-bound proxy).
-        from amc.core import sweepers as sweepers_mod
+        from amg.core import sweepers as sweepers_mod
 
         with patch.object(sweepers_mod._log, "info") as mock_info:
             deleted, skipped = await sweeper.tick()
@@ -1184,7 +1184,7 @@ class TestAttachmentSweeper:
         session_factory: async_sessionmaker[AsyncSession],
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        """``$AMC_ATTACHMENT_RETENTION_DAYS`` overrides the default."""
+        """``$AMG_ATTACHMENT_RETENTION_DAYS`` overrides the default."""
 
         monkeypatch.setenv(ENV_ATTACHMENT_RETENTION_DAYS, "30")
         sweeper = AttachmentSweeper(session_factory=session_factory)

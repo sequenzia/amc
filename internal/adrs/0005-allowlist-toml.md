@@ -5,7 +5,7 @@
 
 ## Context
 
-REQ-AMC-007 (spec §5.7) requires that inbound messages from non-allowlisted senders are stored but **never** surfaced to the agent — they go to a quarantine table reachable only via `/messages/quarantine`. To enforce this the adapter needs a source-of-truth list of allowed senders, looked up at message-ingest time on both platforms.
+REQ-AMG-007 (spec §5.7) requires that inbound messages from non-allowlisted senders are stored but **never** surfaced to the agent — they go to a quarantine table reachable only via `/messages/quarantine`. To enforce this the adapter needs a source-of-truth list of allowed senders, looked up at message-ingest time on both platforms.
 
 Format options considered:
 
@@ -20,10 +20,10 @@ A third concern is **reload semantics**. The adapter is long-running; the allowl
 
 ## Decision
 
-The allowlist is a **TOML file at `~/.config/messaging-agent/allowlist.toml`** (override via `AMC_ALLOWLIST_PATH`), with the following shape:
+The allowlist is a **TOML file at `~/.config/messaging-agent/allowlist.toml`** (override via `AMG_ALLOWLIST_PATH`), with the following shape:
 
 ```toml
-# Allowlist for the Agent Messaging Channel.
+# Allowlist for the Agent Messaging Gateway.
 # Each entry under [[person]] binds an optional shared person_id to one or more
 # platform-specific sender IDs. Messages from any sender not listed here are
 # stored in the quarantine table and never reach the agent.
@@ -61,7 +61,7 @@ Implementation rules:
 - **No new dependency.** `tomllib` is stdlib in Python 3.11+; the project already pins 3.12.
 - **Comments survive.** TOML supports `#` comments natively, so the file documents itself.
 - **Cross-platform identity built in.** `person_id` is optional but standard; when present, the storage layer's `identity_links` table is populated from the same source of truth that drives allowlist enforcement.
-- **Reload is explicit and bounded.** `SIGHUP` is one signal, easy to script (`kill -HUP $(pgrep -f amc.adapter)`), no file-watch race conditions.
+- **Reload is explicit and bounded.** `SIGHUP` is one signal, easy to script (`kill -HUP $(pgrep -f amg.adapter)`), no file-watch race conditions.
 - **Operator-friendly co-location.** The file sits next to the secrets file (`~/.config/messaging-agent/.env`) — one config directory to back up, one to chmod 0700.
 
 ### Negative
@@ -88,7 +88,7 @@ Implementation rules:
 ## References
 
 - Blueprint §5.3 — `senders.person_id`, `identity_links` table
-- Spec §5.7 / REQ-AMC-007 — Sender allowlist & quarantine feature
-- Spec §11.2 — `AMC_ALLOWLIST_PATH` env var
+- Spec §5.7 / REQ-AMG-007 — Sender allowlist & quarantine feature
+- Spec §11.2 — `AMG_ALLOWLIST_PATH` env var
 - Spec §14 OQ-4 — Migration of quarantined messages when allowlist flips (separate, still-open)
 - ADR 0001 — Python + FastAPI (enables stdlib `tomllib`)

@@ -1,12 +1,12 @@
 # Architecture Overview
 
-The Agent Messaging Channel (AMC) lets a single AI agent send and receive messages on **iMessage** and **Discord** through one unified, bearer-protected REST surface. This page explains how the adapter is composed, what it exposes, and how a message travels through the system in each direction.
+The Agent Messaging Gateway (AMG) lets a single AI agent send and receive messages on **iMessage** and **Discord** through one unified, bearer-protected REST surface. This page explains how the adapter is composed, what it exposes, and how a message travels through the system in each direction.
 
 The guiding design principle is **decoupling**: the agent runtime, the transport, and the platform connectors are each replaceable without rewriting the others. That decoupling is enforced by a small number of stable contracts — the [normalized message envelope](message-envelope.md), the [REST API](../reference/rest-api.md), and the [MCP tool surface](../reference/mcp-tools.md).
 
 ## The three-layer model
 
-AMC is organized as three layers, each independently replaceable:
+AMG is organized as three layers, each independently replaceable:
 
 1. **Agent runtimes** — any agent that can either speak MCP or make HTTP calls.
 2. **MCP wrapper (or direct HTTP)** — a thin Python layer (FastMCP) that translates four MCP tools into HTTP calls against the adapter. It contains **zero platform-specific code**; agents that don't speak MCP skip this layer and call the adapter directly.
@@ -37,7 +37,7 @@ flowchart TD
 
 ## The adapter process
 
-The adapter is constructed by `build_app()` in `amc/app.py`, which returns a FastAPI instance whose **lifespan** wires up everything on startup and tears it down in reverse on shutdown. The module-level `app = build_app()` is what production entry points bind to (`uvicorn amc.app:app`).
+The adapter is constructed by `build_app()` in `amg/app.py`, which returns a FastAPI instance whose **lifespan** wires up everything on startup and tears it down in reverse on shutdown. The module-level `app = build_app()` is what production entry points bind to (`uvicorn amg.app:app`).
 
 The adapter is the **single source of truth**: every inbound and outbound message lives in its SQLite database, and connectors run as in-process background tasks rather than as separate services.
 
@@ -45,11 +45,11 @@ The adapter is the **single source of truth**: every inbound and outbound messag
 
 On startup the lifespan runs the following steps, in order:
 
-1. **Config + secrets.** Loads `~/.config/messaging-agent/.env` into `os.environ` via python-dotenv (process env wins on conflict), validates `AMC_BEARER_TOKEN`, loads the allowlist (`~/.config/messaging-agent/allowlist.toml` or `$AMC_ALLOWLIST_PATH`), and loads the webhook config (`AMC_WEBHOOK_URL` + `AMC_WEBHOOK_SECRET`).
-2. **Storage.** Creates the async SQLite engine from `$AMC_DB_PATH` and builds an async session factory, both stored on `app.state`.
+1. **Config + secrets.** Loads `~/.config/messaging-agent/.env` into `os.environ` via python-dotenv (process env wins on conflict), validates `AMG_BEARER_TOKEN`, loads the allowlist (`~/.config/messaging-agent/allowlist.toml` or `$AMG_ALLOWLIST_PATH`), and loads the webhook config (`AMG_WEBHOOK_URL` + `AMG_WEBHOOK_SECRET`).
+2. **Storage.** Creates the async SQLite engine from `$AMG_DB_PATH` and builds an async session factory, both stored on `app.state`.
 3. **Sink + webhook worker.** Instantiates the `WebhookWorker`, then builds the `MessageSink` (wired with the allowlist and webhook config) and stores it on `app.state`.
-4. **Supporting services.** Sets up the `AttachmentStore` (bind URL from `AMC_BIND_HOST` / `AMC_BIND_PORT`, default `127.0.0.1:8080`), the per-channel `RateLimiter`, the `IdempotencyStore` + `IdempotencySweeper`, and the `AttachmentSweeper` (daily sweep, 90-day retention).
-5. **Connectors (conditional).** Starts **Discord** if `$AMC_DISCORD_BOT_TOKEN` is set (launched as an asyncio task); starts **iMessage** only on macOS (`sys.platform == "darwin"`) when `~/Library/Messages/chat.db` is readable. Each connector that starts registers with the `/healthz` registry; the others surface as `disabled`.
+4. **Supporting services.** Sets up the `AttachmentStore` (bind URL from `AMG_BIND_HOST` / `AMG_BIND_PORT`, default `127.0.0.1:8080`), the per-channel `RateLimiter`, the `IdempotencyStore` + `IdempotencySweeper`, and the `AttachmentSweeper` (daily sweep, 90-day retention).
+5. **Connectors (conditional).** Starts **Discord** if `$AMG_DISCORD_BOT_TOKEN` is set (launched as an asyncio task); starts **iMessage** only on macOS (`sys.platform == "darwin"`) when `~/Library/Messages/chat.db` is readable. Each connector that starts registers with the `/healthz` registry; the others surface as `disabled`.
 6. **Workers.** Starts the webhook worker, the idempotency sweeper, and the attachment sweeper.
 
 ### Shutdown ordering
@@ -71,7 +71,7 @@ flowchart LR
 ```
 
 !!! tip "Running the adapter"
-    Day-to-day, the adapter is managed by the `amc` operator CLI (`amc serve adapter`, `amc install`, `amc status`). See the [amc CLI](../reference/cli.md) and the [Getting Started](../getting-started/index.md) guide.
+    Day-to-day, the adapter is managed by the `amg` operator CLI (`amg serve adapter`, `amg install`, `amg status`). See the [amg CLI](../reference/cli.md) and the [Getting Started](../getting-started/index.md) guide.
 
 ## Request surfaces
 
@@ -80,7 +80,7 @@ flowchart LR
 | Method | Path | Purpose |
 |--------|------|---------|
 | `GET`  | `/messages/unread`   | List messages this agent has not yet marked read |
-| `GET`  | `/messages/{id}`     | Fetch a single normalized message by AMC id |
+| `GET`  | `/messages/{id}`     | Fetch a single normalized message by AMG id |
 | `GET`  | `/messages/context`  | Fetch surrounding messages for a channel/thread |
 | `POST` | `/messages/mark_read`| Mark one or more messages read for this agent |
 | `GET`  | `/messages/quarantine`| List inbound messages held by the allowlist |
@@ -93,13 +93,13 @@ The `X-Agent-ID` header is required on `/messages/unread`, `/messages/{id}`, `/m
 Beyond these, the schema and docs routes — `GET /openapi.json`, `/docs`, `/redoc` — are re-registered behind the same bearer dependency rather than left anonymous, so the API surface is never exposed to anyone who can merely reach the bind address.
 
 !!! note "`/typing` is defined but not mounted"
-    A typing-indicator route exists at `amc/api/typing.py` (`POST /typing`) but is **not** included in `build_app()` yet. Treat it as planned, not live.
+    A typing-indicator route exists at `amg/api/typing.py` (`POST /typing`) but is **not** included in `build_app()` yet. Treat it as planned, not live.
 
 For full request/response shapes see the [REST API reference](../reference/rest-api.md). For the agent-facing tool names that map onto these endpoints, see [MCP Tools](../reference/mcp-tools.md).
 
 ## The MessageSink chokepoint
 
-Every message that enters or leaves the system is persisted through a single component, `MessageSink` (`amc/core/message_sink.py`). Connectors call `record_inbound`; the send route calls `record_outbound`. Both run the same single SQLite transaction that:
+Every message that enters or leaves the system is persisted through a single component, `MessageSink` (`amg/core/message_sink.py`). Connectors call `record_inbound`; the send route calls `record_outbound`. Both run the same single SQLite transaction that:
 
 1. **UPSERTs** the sender, the channel, and any attachments.
 2. **INSERTs** the message row.
@@ -167,7 +167,7 @@ sequenceDiagram
         API->>CN: send(channel_id, body)
         CN-->>API: platform message id
         API->>SK: record_outbound(envelope, cursor)
-        SK-->>API: AMC message_id
+        SK-->>API: AMG message_id
         API-->>AG: 201 with message_id
     end
 ```
@@ -178,7 +178,7 @@ Source inference is purely string-based: a `channel_id` beginning with `discord:
 
 Three asyncio workers run for the lifetime of the adapter process:
 
-- **Webhook worker** — delivers `webhook_deliveries` rows to the configured `AMC_WEBHOOK_URL`, signing each payload with HMAC-SHA256 and retrying on failure with exponential backoff (`1s, 5s, 30s, 2m, 10m`).
+- **Webhook worker** — delivers `webhook_deliveries` rows to the configured `AMG_WEBHOOK_URL`, signing each payload with HMAC-SHA256 and retrying on failure with exponential backoff (`1s, 5s, 30s, 2m, 10m`).
 - **Idempotency sweeper** — runs hourly, expiring `Idempotency-Key` records past their 24-hour TTL so the dedup table doesn't grow unbounded.
 - **Attachment sweeper** — runs daily, deleting re-hosted attachments past the 90-day retention window.
 

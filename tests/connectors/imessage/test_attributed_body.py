@@ -1,7 +1,7 @@
 """Golden test for the ``attributedBody`` typedstream decoder.
 
 Pins the production decoder
-(``amc.connectors.imessage.reader.decode_attributed_body``) against a
+(``amg.connectors.imessage.reader.decode_attributed_body``) against a
 text golden file so any future change to the decoder produces a clear,
 reviewable diff in the test output.
 
@@ -32,7 +32,7 @@ from __future__ import annotations
 import sqlite3
 from pathlib import Path
 
-from amc.connectors.imessage.reader import decode_attributed_body
+from amg.connectors.imessage.reader import decode_attributed_body
 from tests.fixtures.build_chat_db import (
     MSG_GUID_ATTRIB,
     ensure_chat_db,

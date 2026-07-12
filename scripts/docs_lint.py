@@ -1,4 +1,4 @@
-"""Documentation linter for AMC repo.
+"""Documentation linter for AMG repo.
 
 Validates Markdown docs across the repository for two classes of breakage:
 

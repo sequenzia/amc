@@ -1,7 +1,7 @@
 [project]
-name = "amc-mcp"
+name = "amg-mcp"
 version = "0.1.0"
-description = "Thin MCP stdio wrapper that proxies the four AMC tools to the adapter HTTP API."
+description = "Thin MCP stdio wrapper that proxies the four AMG tools to the adapter HTTP API."
 authors = [
     { name = "Stephen Sequenzia", email = "sequenzia@gmail.com" }
 ]
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-amc-mcp = "amc_mcp.__main__:main"
+amg-mcp = "amg_mcp.__main__:main"
 
 [dependency-groups]
 dev = [

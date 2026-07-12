@@ -8,10 +8,10 @@ Scenario walked end-to-end:
 
 1. A writable copy of the Phase 0 chat.db fixture is materialised in a
    temp directory.
-2. A real :class:`amc.connectors.imessage.connector.ImessageConnector`
+2. A real :class:`amg.connectors.imessage.connector.ImessageConnector`
    is wired against that temp chat.db, with a
    :class:`tests.fakes.applescript.FakeAppleScriptSender` injected for
-   the outbound path. The full :mod:`amc.app` adapter is booted on top
+   the outbound path. The full :mod:`amg.app` adapter is booted on top
    of a freshly-migrated SQLite store.
 3. A new ``message`` row (allowlisted handle, ROWID past the seed
    ``MAX(message.ROWID)``) is appended to the temp chat.db using
@@ -49,37 +49,37 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_imessage_connector,
     configure_rate_limiter,
     reset_imessage_connector,
     reset_rate_limiter,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_session_factory as configure_send_session_factory,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     reset_session_factory as reset_send_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     configure_session_factory as configure_unread_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     reset_session_factory as reset_unread_session_factory,
 )
-from amc.app import build_app
-from amc.connectors.imessage.connector import ImessageConnector
-from amc.connectors.imessage.reader import ChatDbReader
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.idempotency import (
+from amg.app import build_app
+from amg.connectors.imessage.connector import ImessageConnector
+from amg.connectors.imessage.reader import ChatDbReader
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.idempotency import (
     IdempotencyStore,
     configure_idempotency_store,
     reset_idempotency_store,
 )
-from amc.core.message_sink import MessageSink
-from amc.core.rate_limit import RateLimiter
+from amg.core.message_sink import MessageSink
+from amg.core.rate_limit import RateLimiter
 from tests.e2e._helpers import (
     append_chat_db_inbound_row,
     apply_alembic_head,
@@ -142,8 +142,8 @@ def chat_db_copy(src_chat_db_path: Path, tmp_path: Path) -> Path:
 @pytest.fixture
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Fresh SQLite file with the full Alembic migrations applied."""
-    db_path = tmp_path / "amc-imessage-roundtrip.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    db_path = tmp_path / "amg-imessage-roundtrip.db"
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     apply_alembic_head(ALEMBIC_INI, db_path)
     yield db_path
 
@@ -217,7 +217,7 @@ async def _start_live_system(
 ) -> _LiveSystem:
     """Wire up + start every component for the round-trip test.
 
-    The wiring deliberately mirrors what an eventual ``amc.app`` lifespan
+    The wiring deliberately mirrors what an eventual ``amg.app`` lifespan
     hook will do once that landed: build the engine, build the sink +
     iMessage connector, register everything on the messages_send /
     messages_unread routers, and start the connector's background poller.

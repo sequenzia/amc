@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.errors`` — standard error envelope + FastAPI handlers.
+"""Tests for ``amg.core.errors`` — standard error envelope + FastAPI handlers.
 
 Covers spec §7.4.12 (envelope shape) and the codes referenced throughout §5
 and §7.4. Uses a minimal in-test FastAPI app per task #27's note that no
@@ -16,9 +16,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from pydantic import BaseModel
 
-from amc.core.errors import (
+from amg.core.errors import (
     ERROR_STATUS,
-    AMCError,
+    AMGError,
     ErrorCode,
     build_error_body,
     register_exception_handlers,
@@ -55,16 +55,16 @@ def _build_app() -> FastAPI:
 
     @app.get("/raise/{code}")
     def raise_code(code: str) -> dict[str, str]:
-        # Raise the AMCError for the given code with optional details/headers
+        # Raise the AMGError for the given code with optional details/headers
         # selected by the code under test.
         if code == "RATE_LIMITED":
-            raise AMCError(
+            raise AMGError(
                 ErrorCode.RATE_LIMITED,
                 "Per-channel rate limit exceeded.",
                 headers={"Retry-After": "7"},
             )
         if code == "MESSAGE_NOT_FOUND":
-            raise AMCError(
+            raise AMGError(
                 ErrorCode.MESSAGE_NOT_FOUND,
                 "No such message.",
                 details={"message_id": "msg_xyz"},
@@ -75,18 +75,18 @@ def _build_app() -> FastAPI:
     def raise_by_name(name: str) -> dict[str, str]:
         # Generic raiser that maps a path arg to an ErrorCode.
         ec = ErrorCode(name)
-        raise AMCError(ec, f"failure for {ec.value}")
+        raise AMGError(ec, f"failure for {ec.value}")
 
     @app.get("/raise-string-code")
     def raise_string_code() -> dict[str, str]:
         # Raising with a raw string code (callers in other modules may do
         # this without importing the enum).
-        raise AMCError("UNAUTHORIZED", "Bearer missing.")
+        raise AMGError("UNAUTHORIZED", "Bearer missing.")
 
     @app.get("/raise-unknown-code")
     def raise_unknown_code() -> dict[str, str]:
         # Unknown code with no explicit status → falls back to 500.
-        raise AMCError("MADE_UP_CODE", "unclassified failure")
+        raise AMGError("MADE_UP_CODE", "unclassified failure")
 
     @app.get("/boom")
     def boom() -> dict[str, str]:
@@ -168,7 +168,7 @@ def test_error_code_values_match_string_names() -> None:
         ErrorCode.INTERNAL_ERROR,
     ],
 )
-def test_amc_error_produces_standard_envelope(client: TestClient, code: ErrorCode) -> None:
+def test_amg_error_produces_standard_envelope(client: TestClient, code: ErrorCode) -> None:
     response = client.get(f"/raise-by-name/{code.value}")
     assert response.status_code == ERROR_STATUS[code]
 
@@ -256,7 +256,7 @@ def test_details_included_when_supplied() -> None:
     assert body["error"]["details"] == {"message_id": "msg_xyz"}
 
 
-def test_details_appears_when_amc_error_passes_them(client: TestClient) -> None:
+def test_details_appears_when_amg_error_passes_them(client: TestClient) -> None:
     response = client.get("/raise/MESSAGE_NOT_FOUND")
     assert response.status_code == 404
     body = response.json()
@@ -307,24 +307,24 @@ def test_unhandled_exception_returns_sanitized_500(
     )
 
 
-def test_amc_error_constructor_status_override() -> None:
-    err = AMCError(ErrorCode.PLATFORM_AUTH, "down", status=503)
+def test_amg_error_constructor_status_override() -> None:
+    err = AMGError(ErrorCode.PLATFORM_AUTH, "down", status=503)
     assert err.status == 503
     assert err.code is ErrorCode.PLATFORM_AUTH
 
 
-def test_amc_error_default_status_uses_mapping() -> None:
-    err = AMCError(ErrorCode.RATE_LIMITED, "slow")
+def test_amg_error_default_status_uses_mapping() -> None:
+    err = AMGError(ErrorCode.RATE_LIMITED, "slow")
     assert err.status == 429
 
 
-def test_amc_error_string_code_resolved_to_enum() -> None:
-    err = AMCError("CHANNEL_NOT_FOUND", "no chan")
+def test_amg_error_string_code_resolved_to_enum() -> None:
+    err = AMGError("CHANNEL_NOT_FOUND", "no chan")
     assert err.code is ErrorCode.CHANNEL_NOT_FOUND
     assert err.status == 404
 
 
-def test_amc_error_unknown_string_code_status_falls_back() -> None:
-    err = AMCError("MYSTERY", "hmm")
+def test_amg_error_unknown_string_code_status_falls_back() -> None:
+    err = AMGError("MYSTERY", "hmm")
     assert err.status == 500
     assert err.code == "MYSTERY"

@@ -1,13 +1,13 @@
 #!/bin/bash
-# AMC adapter launcher script.
+# AMG adapter launcher script.
 #
-# Invoked by launchd via com.user.amc-adapter.plist. Activates the project's
+# Invoked by launchd via com.user.amg-adapter.plist. Activates the project's
 # uv-managed environment and execs uvicorn so launchd supervises the actual
 # Python process (no extra shell layer to confuse signal handling / KeepAlive).
 #
 # Environment: the adapter loads its own configuration from
 # ~/.config/messaging-agent/.env (see spec §11.2). This script intentionally
-# does not export AMC_* vars.
+# does not export AMG_* vars.
 
 set -euo pipefail
 
@@ -26,6 +26,6 @@ export PATH="${HOME}/.local/bin:/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:$
 
 # `uv run` resolves and activates the project venv, syncing if needed.
 # `--host` and `--port` mirror the §11.2 defaults; the operator can override
-# bind via AMC_BIND_HOST / AMC_BIND_PORT in the .env file once the app reads
+# bind via AMG_BIND_HOST / AMG_BIND_PORT in the .env file once the app reads
 # them.
-exec uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080
+exec uv run uvicorn amg.app:app --host 127.0.0.1 --port 8080

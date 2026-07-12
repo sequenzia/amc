@@ -1,4 +1,4 @@
-"""Tests for ``amc logs`` (spec §5.7).
+"""Tests for ``amg logs`` (spec §5.7).
 
 Coverage:
 * Path resolution: today's file wins; missing today → newest-by-mtime
@@ -27,14 +27,14 @@ from pathlib import Path
 import pytest
 from typer.testing import CliRunner
 
-from amc.cli.app import app
-from amc.cli.logs import (
+from amg.cli.app import app
+from amg.cli.logs import (
     follow,
     read_last_n_lines,
     resolve_app_log,
     run_logs,
 )
-from amc.cli.services import REGISTRY
+from amg.cli.services import REGISTRY
 
 runner = CliRunner()
 
@@ -239,12 +239,12 @@ def test_run_logs_launchd_mode(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) 
     new_registry = tuple(patched if s.name == "adapter" else s for s in REGISTRY)
     # ``resolve_targets`` (in services.py) consults the module-level
     # ``_BY_NAME`` index built at import time, so patching just
-    # ``amc.cli.logs.REGISTRY`` is not enough — we must patch the indices
+    # ``amg.cli.logs.REGISTRY`` is not enough — we must patch the indices
     # the resolver actually reads.
-    monkeypatch.setattr("amc.cli.logs.REGISTRY", new_registry)
-    monkeypatch.setattr("amc.cli.services._BY_NAME", {s.name: s for s in new_registry})
-    monkeypatch.setattr("amc.cli.services._BY_LABEL", {s.label: s for s in new_registry})
-    monkeypatch.setattr("amc.cli.services.REGISTRY", new_registry)
+    monkeypatch.setattr("amg.cli.logs.REGISTRY", new_registry)
+    monkeypatch.setattr("amg.cli.services._BY_NAME", {s.name: s for s in new_registry})
+    monkeypatch.setattr("amg.cli.services._BY_LABEL", {s.label: s for s in new_registry})
+    monkeypatch.setattr("amg.cli.services.REGISTRY", new_registry)
 
     out = io.StringIO()
     err = io.StringIO()
@@ -312,7 +312,7 @@ def test_cli_logs_no_follow_exits_zero(tmp_path: Path, monkeypatch: pytest.Monke
     svc = _adapter()
     f = tmp_path / f"{svc.name}-{today.isoformat()}.log"
     f.write_text("hello\n")
-    monkeypatch.setattr("amc.cli.logs.LOG_DIR", tmp_path)
+    monkeypatch.setattr("amg.cli.logs.LOG_DIR", tmp_path)
 
     result = runner.invoke(app, ["logs", "--no-follow", "-n", "10", "adapter"])
     assert result.exit_code == 0, result.output
@@ -323,7 +323,7 @@ def test_cli_logs_unknown_service_exits_one(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     # Need a real directory so we get past the "logs dir missing" gate.
-    monkeypatch.setattr("amc.cli.logs.LOG_DIR", tmp_path)
+    monkeypatch.setattr("amg.cli.logs.LOG_DIR", tmp_path)
 
     result = runner.invoke(app, ["logs", "--no-follow", "not-a-service"])
     assert result.exit_code == 1

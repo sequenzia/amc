@@ -1,4 +1,4 @@
-"""Tests for ``amc service {start,stop,restart,enable,disable}`` (spec §5.5).
+"""Tests for ``amg service {start,stop,restart,enable,disable}`` (spec §5.5).
 
 Coverage matrix:
 
@@ -25,7 +25,7 @@ Strategy:
   whole verb (multiple launchctl invocations per service for the
   auto-bootstrap path) without needing to stub each helper individually.
 * For tests that need an installed plist, monkeypatch
-  :data:`amc.cli.service.LAUNCH_AGENTS_DIR` to a ``tmp_path`` and
+  :data:`amg.cli.service.LAUNCH_AGENTS_DIR` to a ``tmp_path`` and
   ``touch`` the expected ``<label>.plist``.
 * ``CliRunner`` is used so both the Typer wiring and the underlying
   driver are exercised end-to-end.
@@ -40,9 +40,9 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from amc.cli import launchctl, service
-from amc.cli.app import app
-from amc.cli.services import REGISTRY
+from amg.cli import launchctl, service
+from amg.cli.app import app
+from amg.cli.services import REGISTRY
 
 runner = CliRunner()
 
@@ -111,11 +111,11 @@ def _service_names() -> list[str]:
 
 
 def test_start_single_service_invokes_kickstart_argv(monkeypatch: Any) -> None:
-    """``amc service start adapter`` runs ``launchctl kickstart gui/<uid>/<label>``."""
+    """``amg service start adapter`` runs ``launchctl kickstart gui/<uid>/<label>``."""
     captured = _install_fake_run(monkeypatch, default=_ok())
     result = runner.invoke(app, ["service", "start", "adapter"])
     assert result.exit_code == 0, result.output
-    assert captured == [["launchctl", "kickstart", _target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "kickstart", _target("com.user.amg-adapter")]]
     assert "adapter" in result.stdout
     assert "started" in result.stdout
 
@@ -124,7 +124,7 @@ def test_stop_single_service_invokes_kill_sigterm_argv(monkeypatch: Any) -> None
     captured = _install_fake_run(monkeypatch, default=_ok())
     result = runner.invoke(app, ["service", "stop", "adapter"])
     assert result.exit_code == 0
-    assert captured == [["launchctl", "kill", "SIGTERM", _target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "kill", "SIGTERM", _target("com.user.amg-adapter")]]
     assert "stopped" in result.stdout
 
 
@@ -133,7 +133,7 @@ def test_restart_uses_dash_k_form(monkeypatch: Any) -> None:
     captured = _install_fake_run(monkeypatch, default=_ok())
     result = runner.invoke(app, ["service", "restart", "adapter"])
     assert result.exit_code == 0
-    assert captured == [["launchctl", "kickstart", "-k", _target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "kickstart", "-k", _target("com.user.amg-adapter")]]
     assert "restarted" in result.stdout
 
 
@@ -141,7 +141,7 @@ def test_enable_invokes_enable_argv(monkeypatch: Any) -> None:
     captured = _install_fake_run(monkeypatch, default=_ok())
     result = runner.invoke(app, ["service", "enable", "adapter"])
     assert result.exit_code == 0
-    assert captured == [["launchctl", "enable", _target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "enable", _target("com.user.amg-adapter")]]
     assert "enabled" in result.stdout
 
 
@@ -149,7 +149,7 @@ def test_disable_invokes_disable_argv(monkeypatch: Any) -> None:
     captured = _install_fake_run(monkeypatch, default=_ok())
     result = runner.invoke(app, ["service", "disable", "adapter"])
     assert result.exit_code == 0
-    assert captured == [["launchctl", "disable", _target("com.user.amc-adapter")]]
+    assert captured == [["launchctl", "disable", _target("com.user.amg-adapter")]]
     assert "disabled" in result.stdout
 
 
@@ -231,7 +231,7 @@ def test_start_missing_plist_exits_two_with_install_first_message(
     )
     result = runner.invoke(app, ["service", "start", "adapter"])
     assert result.exit_code == 2
-    assert "Service not installed; run amc install first" in result.stdout
+    assert "Service not installed; run amg install first" in result.stdout
     # No bootstrap should have been attempted.
     assert not any(argv[:2] == ["launchctl", "bootstrap"] for argv in captured)
 

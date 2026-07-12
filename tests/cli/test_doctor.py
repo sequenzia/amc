@@ -1,4 +1,4 @@
-"""Tests for ``amc doctor`` (spec §5.8).
+"""Tests for ``amg doctor`` (spec §5.8).
 
 Coverage:
 * Each individual check function returns the documented status for each
@@ -12,7 +12,7 @@ Coverage:
 * ``run_doctor(json_mode=True)`` emits JSON-parseable output with the
   required field shape (Functional).
 * Exit-code matrix: all ok/warn → 0; any fail → 2 (Functional).
-* The ``amc doctor`` Typer command surfaces the exit code (Integration).
+* The ``amg doctor`` Typer command surfaces the exit code (Integration).
 
 Strategy:
 * Patch module attributes (``CHAT_DB_PATH``, ``ENV_PATH``,
@@ -38,9 +38,9 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from amc.cli import doctor
-from amc.cli.app import app
-from amc.cli.doctor import (
+from amg.cli import doctor
+from amg.cli.app import app
+from amg.cli.doctor import (
     check_chat_db_readable,
     check_env_file,
     check_log_dir_writable,
@@ -52,7 +52,7 @@ from amc.cli.doctor import (
     run_checks,
     run_doctor,
 )
-from amc.cli.services import REGISTRY
+from amg.cli.services import REGISTRY
 
 runner = CliRunner()
 
@@ -83,7 +83,7 @@ def test_check_uv_on_path_missing(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_check_env_file_ok(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     env = tmp_path / ".env"
-    env.write_text("AMC_BEARER_TOKEN=abc\n")
+    env.write_text("AMG_BEARER_TOKEN=abc\n")
     monkeypatch.setattr(doctor, "ENV_PATH", env)
     status, details = check_env_file()
     assert status == "ok"
@@ -439,7 +439,7 @@ def test_run_doctor_exit_code_matrix(statuses: list[str], expected_code: int) ->
 # ---------------------------------------------------------------------------
 
 
-def test_amc_doctor_command_runs_and_returns_an_exit_code(
+def test_amg_doctor_command_runs_and_returns_an_exit_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """End-to-end via the Typer app.
@@ -459,13 +459,13 @@ def test_amc_doctor_command_runs_and_returns_an_exit_code(
             out.write("[]\n")
         return 0
 
-    monkeypatch.setattr("amc.cli.doctor.run_doctor", fake_run_doctor)
+    monkeypatch.setattr("amg.cli.doctor.run_doctor", fake_run_doctor)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
     assert captured["json_mode"] is False
 
 
-def test_amc_doctor_command_forwards_json_flag(
+def test_amg_doctor_command_forwards_json_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -474,18 +474,18 @@ def test_amc_doctor_command_forwards_json_flag(
         captured["json_mode"] = json_mode
         return 0
 
-    monkeypatch.setattr("amc.cli.doctor.run_doctor", fake_run_doctor)
+    monkeypatch.setattr("amg.cli.doctor.run_doctor", fake_run_doctor)
     result = runner.invoke(app, ["doctor", "--json"])
     assert result.exit_code == 0
     assert captured["json_mode"] is True
 
 
-def test_amc_doctor_command_propagates_failure_exit_code(
+def test_amg_doctor_command_propagates_failure_exit_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_run_doctor(*, json_mode: bool = False, stream: Any = None) -> int:
         return 2
 
-    monkeypatch.setattr("amc.cli.doctor.run_doctor", fake_run_doctor)
+    monkeypatch.setattr("amg.cli.doctor.run_doctor", fake_run_doctor)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 2

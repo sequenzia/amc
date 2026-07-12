@@ -1,4 +1,4 @@
-"""End-to-end harness — stdio_client → real amc-mcp subprocess → mock adapter.
+"""End-to-end harness — stdio_client → real amg-mcp subprocess → mock adapter.
 
 Mirrors ``mcp-wrapper/tests/e2e.test.ts``: covers the ``initialize``
 handshake, ``tools/list``, every ``tools/call`` happy path, the §7.4.12
@@ -31,7 +31,7 @@ from mcp.types import InitializeResult
 pytestmark = pytest.mark.asyncio
 
 
-SERVER_NAME = "amc-mcp"
+SERVER_NAME = "amg-mcp"
 SERVER_VERSION = "0.1.0"
 
 DISCORD_ENVELOPE: dict[str, Any] = {
@@ -81,15 +81,15 @@ BEARER_TOKEN = "test-bearer-token"
 AGENT_ID = "test-agent"
 
 
-def _amc_mcp_command() -> tuple[str, list[str]]:
+def _amg_mcp_command() -> tuple[str, list[str]]:
     """Locate the wrapper binary and return (command, extra args)."""
-    bin_path = Path(sys.prefix) / "bin" / "amc-mcp"
+    bin_path = Path(sys.prefix) / "bin" / "amg-mcp"
     if bin_path.exists():
         return str(bin_path), []
-    on_path = shutil.which("amc-mcp")
+    on_path = shutil.which("amg-mcp")
     if on_path:
         return on_path, []
-    raise RuntimeError("amc-mcp binary not found — run `uv sync --all-packages` from the repo root")
+    raise RuntimeError("amg-mcp binary not found — run `uv sync --all-packages` from the repo root")
 
 
 @pytest.fixture()
@@ -106,14 +106,14 @@ def adapter() -> MockAdapter:
 async def _open_session(
     adapter: MockAdapter,
 ) -> AsyncIterator[tuple[ClientSession, InitializeResult]]:
-    command, extra_args = _amc_mcp_command()
+    command, extra_args = _amg_mcp_command()
     params = StdioServerParameters(
         command=command,
         args=extra_args,
         env={
-            "AMC_BASE_URL": adapter.base_url,
-            "AMC_BEARER_TOKEN": BEARER_TOKEN,
-            "AMC_AGENT_ID": AGENT_ID,
+            "AMG_BASE_URL": adapter.base_url,
+            "AMG_BEARER_TOKEN": BEARER_TOKEN,
+            "AMG_AGENT_ID": AGENT_ID,
             "PATH": os.environ.get("PATH", ""),
         },
     )
@@ -154,7 +154,7 @@ class TestInitialize:
 
 
 class TestToolsList:
-    async def test_returns_exactly_the_four_amc_tools(self, adapter) -> None:
+    async def test_returns_exactly_the_four_amg_tools(self, adapter) -> None:
         async with _open_session(adapter) as (session, _):
             listing = await session.list_tools()
             names = sorted(t.name for t in listing.tools)

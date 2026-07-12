@@ -3,18 +3,18 @@
 This is the centerpiece of spec §9.1 Checkpoint Gate. It walks the full
 Discord path through every layer the adapter ships:
 
-1. The full :mod:`amc.app` FastAPI adapter is booted on an ephemeral
+1. The full :mod:`amg.app` FastAPI adapter is booted on an ephemeral
    port, fronted by an in-process :class:`uvicorn.Server` so a real HTTP
    stack handles every request (not the FastAPI in-process TestClient).
-2. ``AMC_WEBHOOK_URL`` points at a separate in-process Starlette receiver
+2. ``AMG_WEBHOOK_URL`` points at a separate in-process Starlette receiver
    running on a second ephemeral port. The receiver records every POST
-   and verifies the ``X-AMC-Signature`` HMAC against the shared secret;
+   and verifies the ``X-AMG-Signature`` HMAC against the shared secret;
    any mismatch fails the test loud.
-3. A real :class:`amc.connectors.discord.connector.DiscordConnector`
+3. A real :class:`amg.connectors.discord.connector.DiscordConnector`
    bridges :class:`tests.fakes.discord_gateway.FakeDiscordGateway`
    (inbound) and :class:`tests.fakes.discord_rest.FakeDiscordRest`
-   (outbound) into the adapter's :class:`amc.core.message_sink.MessageSink`.
-4. A real :class:`amc.core.webhook.WebhookWorker` ticks the queue so the
+   (outbound) into the adapter's :class:`amg.core.message_sink.MessageSink`.
+4. A real :class:`amg.core.webhook.WebhookWorker` ticks the queue so the
    recorded ``webhook_deliveries`` row reaches ``status='delivered'``.
 
 The single ``test_discord_roundtrip_full_flow`` exercises:
@@ -43,7 +43,7 @@ Implementation choices
   We mount a Starlette ``Route`` directly to keep the dependency graph
   flat; the same uvicorn server pattern handles both endpoints.
 * **HMAC verification on the receiver**: the receiver re-computes the
-  HMAC using :func:`amc.core.webhook.compute_signature` over the raw
+  HMAC using :func:`amg.core.webhook.compute_signature` over the raw
   bytes the request carried, so the verification path is the canonical
   one a third-party receiver would implement.
 * **No idempotency replay**: each test uses a fresh ``Idempotency-Key``
@@ -71,43 +71,43 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from amc.api.messages_mark_read import (
+from amg.api.messages_mark_read import (
     configure_session_factory as configure_mark_read_session_factory,
 )
-from amc.api.messages_mark_read import (
+from amg.api.messages_mark_read import (
     reset_session_factory as reset_mark_read_session_factory,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_discord_connector,
     configure_rate_limiter,
     reset_discord_connector,
     reset_rate_limiter,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_session_factory as configure_send_session_factory,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     reset_session_factory as reset_send_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     configure_session_factory as configure_unread_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     reset_session_factory as reset_unread_session_factory,
 )
-from amc.app import build_app
-from amc.connectors.discord.connector import DiscordConnector
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.idempotency import (
+from amg.app import build_app
+from amg.connectors.discord.connector import DiscordConnector
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.idempotency import (
     IdempotencyStore,
     configure_idempotency_store,
     reset_idempotency_store,
 )
-from amc.core.message_sink import MessageSink
-from amc.core.rate_limit import RateLimiter
-from amc.core.webhook import WebhookConfig, WebhookWorker, compute_signature
+from amg.core.message_sink import MessageSink
+from amg.core.rate_limit import RateLimiter
+from amg.core.webhook import WebhookConfig, WebhookWorker, compute_signature
 from tests.e2e._helpers import (
     apply_alembic_head,
     build_inmemory_allowlist,
@@ -145,7 +145,7 @@ DELIVERED_TIMEOUT = 5.0
 class _WebhookReceiver:
     """Records every POST and validates the HMAC.
 
-    The receiver is intentionally tiny: it owns a single ``/hooks/amc``
+    The receiver is intentionally tiny: it owns a single ``/hooks/amg``
     route, appends a record dict to :attr:`received` for each POST, and
     sets :attr:`signature_failures` if any inbound HMAC mismatches. Any
     failure is also surfaced as a 400 response so the worker dead-letters
@@ -161,7 +161,7 @@ class _WebhookReceiver:
 
     async def handle(self, request: Request) -> JSONResponse:
         body = await request.body()
-        signature_header = request.headers.get("x-amc-signature", "")
+        signature_header = request.headers.get("x-amg-signature", "")
         expected = compute_signature(self.secret, body)
         ok = signature_header == expected
         record = {
@@ -179,7 +179,7 @@ class _WebhookReceiver:
 
 
 def _build_receiver_app(receiver: _WebhookReceiver) -> Starlette:
-    return Starlette(routes=[Route("/hooks/amc", receiver.handle, methods=["POST"])])
+    return Starlette(routes=[Route("/hooks/amg", receiver.handle, methods=["POST"])])
 
 
 # ---------------------------------------------------------------------------
@@ -323,7 +323,7 @@ async def _wait_for_discord_ready(
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     db_path = tmp_path / "discord-roundtrip.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     apply_alembic_head(ALEMBIC_INI, db_path)
     yield db_path
 
@@ -400,7 +400,7 @@ async def test_discord_roundtrip_full_flow(
     await receiver_server.start()
 
     try:
-        webhook_url = f"{receiver_server.url}/hooks/amc"
+        webhook_url = f"{receiver_server.url}/hooks/amg"
         webhook_config = WebhookConfig(url=webhook_url, secret=WEBHOOK_SECRET)
 
         sink = MessageSink(
@@ -420,7 +420,7 @@ async def test_discord_roundtrip_full_flow(
         )
         connector_task = asyncio.create_task(
             connector.start("fake-token-not-used"),
-            name="amc.test.discord_roundtrip.start",
+            name="amg.test.discord_roundtrip.start",
         )
         await _wait_for_discord_ready(connector, connector_task)
 
@@ -506,9 +506,9 @@ async def test_discord_roundtrip_full_flow(
             )
             posted = receiver.received[-1]
             assert posted["signature_ok"] is True
-            assert posted["headers"]["x-amc-message-id"] == inbound_id
+            assert posted["headers"]["x-amg-message-id"] == inbound_id
             assert posted["headers"]["content-type"] == "application/json"
-            assert posted["headers"]["x-amc-attempt"] == "1"
+            assert posted["headers"]["x-amg-attempt"] == "1"
 
             # Delivery row final state.
             delivery = next(

@@ -6,7 +6,7 @@ import asyncio
 
 import pytest
 
-from amc.connectors.imessage.applescript import (
+from amg.connectors.imessage.applescript import (
     AppleScriptSender,
     OsascriptAppleScriptSender,
     SendResult,

@@ -15,7 +15,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
-from amc.connectors.imessage.applescript import SendResult
+from amg.connectors.imessage.applescript import SendResult
 
 
 @dataclass(frozen=True, slots=True)

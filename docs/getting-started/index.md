@@ -1,6 +1,6 @@
-# AMC Operator Setup Guide
+# AMG Operator Setup Guide
 
-This is the deployment runbook for the **Agent Messaging Channel (AMC)** — a single-Mac service that exposes one AI agent on iMessage and Discord behind a unified MCP + REST surface.
+This is the deployment runbook for the **Agent Messaging Gateway (AMG)** — a single-Mac service that exposes one AI agent on iMessage and Discord behind a unified MCP + REST surface.
 
 This guide takes you from a fresh checkout to a launchd-supervised adapter, an MCP wrapper wired into your agent host, and a verified inbound-and-outbound message round-trip.
 
@@ -50,30 +50,30 @@ The adapter does **not** require Docker, a database server, or any other Mac to 
 ```bash
 # Pick a stable install location — launchd will reference this path.
 mkdir -p ~/code && cd ~/code
-git clone <repo-url> amc
-cd amc
+git clone <repo-url> amg
+cd amg
 
 # Install adapter + MCP wrapper deps into a uv-managed venv (.venv at repo root).
 # The wrapper is a uv workspace member at `mcp/`; --all-packages installs both.
 uv sync --all-packages
 ```
 
-`uv sync` reads the root `pyproject.toml` + `uv.lock` (and `mcp/pyproject.toml`) and produces `.venv/`. After this you can run any Python entry point with `uv run <cmd>`, and the wrapper's `amc-mcp` console script is on PATH inside the venv.
+`uv sync` reads the root `pyproject.toml` + `uv.lock` (and `mcp/pyproject.toml`) and produces `.venv/`. After this you can run any Python entry point with `uv run <cmd>`, and the wrapper's `amg-mcp` console script is on PATH inside the venv.
 
 Verify both layers built:
 
 ```bash
-uv run python -c "import amc; print(amc.__name__)"        # → amc
-uv run python -c "import amc_mcp; print(amc_mcp.__name__)"  # → amc_mcp
+uv run python -c "import amg; print(amg.__name__)"        # → amg
+uv run python -c "import amg_mcp; print(amg_mcp.__name__)"  # → amg_mcp
 ```
 
-> **Install location matters.** `amc install` burns the absolute path of the repo into `~/Library/LaunchAgents/com.user.amc-adapter.plist` (and the other service plists). If you move the repo later, re-run `amc install` to re-render.
+> **Install location matters.** `amg install` burns the absolute path of the repo into `~/Library/LaunchAgents/com.user.amg-adapter.plist` (and the other service plists). If you move the repo later, re-run `amg install` to re-render.
 
 ---
 
 ## 3. Environment Configuration
 
-The adapter reads its configuration from a single file: **`~/.config/messaging-agent/.env`**. This path is hard-coded in `amc.core.auth.load_bearer_token()` and used by every module that needs an `AMC_*` variable.
+The adapter reads its configuration from a single file: **`~/.config/messaging-agent/.env`**. This path is hard-coded in `amg.core.auth.load_bearer_token()` and used by every module that needs an `AMG_*` variable.
 
 ### 3.1 Create the file
 
@@ -91,7 +91,7 @@ The `0600` mode is non-negotiable — the file holds your bearer token, Discord 
 python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Paste the result into `AMC_BEARER_TOKEN=` in the `.env` file.
+Paste the result into `AMG_BEARER_TOKEN=` in the `.env` file.
 
 ### 3.3 Required and optional variables
 
@@ -99,16 +99,16 @@ The file shipped as `.env.example` lists every variable the adapter understands 
 
 | Variable | Required? | Notes |
 |----------|-----------|-------|
-| `AMC_BEARER_TOKEN` | **Yes** | Generated above. Every REST call carries `Authorization: Bearer <token>`. |
-| `AMC_DISCORD_BOT_TOKEN` | **Yes** if Discord is enabled | From the Developer Portal (§5 below). Treat as a credential, not a config value. |
-| `AMC_WEBHOOK_URL` | Optional | Empty disables the outbound webhook. Set to the agent's listener URL if you want push notifications instead of polling `/messages/unread`. |
-| `AMC_WEBHOOK_SECRET` | **Yes** if `AMC_WEBHOOK_URL` is set | HMAC-SHA256 shared secret signed into every webhook delivery so the receiver can verify authenticity. |
-| `AMC_BIND_HOST` / `AMC_BIND_PORT` | No | Defaults `127.0.0.1:8080`. Leave loopback unless you're fronting the adapter with a tunnel or reverse proxy. |
-| `AMC_DB_PATH`, `AMC_ATTACHMENT_DIR`, `AMC_LOG_DIR`, `AMC_ALLOWLIST_PATH` | No | Defaults under `~/Library/Application Support/messaging-agent/` and `~/Library/Logs/messaging-agent/`. Override only if you have a strong reason — the launchd plist and most tooling assume the defaults. |
-| `AMC_RATE_LIMIT_PER_CHANNEL_RPS` (`1`) and `AMC_RATE_LIMIT_PER_CHANNEL_BURST` (`5`) | No | Per-channel token bucket. Keep low; raising these without coordination will trip platform-side limits. |
-| `AMC_ATTACHMENT_RETENTION_DAYS` (`90`) | No | The attachment sweeper deletes re-hosted blobs older than this many days. |
+| `AMG_BEARER_TOKEN` | **Yes** | Generated above. Every REST call carries `Authorization: Bearer <token>`. |
+| `AMG_DISCORD_BOT_TOKEN` | **Yes** if Discord is enabled | From the Developer Portal (§5 below). Treat as a credential, not a config value. |
+| `AMG_WEBHOOK_URL` | Optional | Empty disables the outbound webhook. Set to the agent's listener URL if you want push notifications instead of polling `/messages/unread`. |
+| `AMG_WEBHOOK_SECRET` | **Yes** if `AMG_WEBHOOK_URL` is set | HMAC-SHA256 shared secret signed into every webhook delivery so the receiver can verify authenticity. |
+| `AMG_BIND_HOST` / `AMG_BIND_PORT` | No | Defaults `127.0.0.1:8080`. Leave loopback unless you're fronting the adapter with a tunnel or reverse proxy. |
+| `AMG_DB_PATH`, `AMG_ATTACHMENT_DIR`, `AMG_LOG_DIR`, `AMG_ALLOWLIST_PATH` | No | Defaults under `~/Library/Application Support/messaging-agent/` and `~/Library/Logs/messaging-agent/`. Override only if you have a strong reason — the launchd plist and most tooling assume the defaults. |
+| `AMG_RATE_LIMIT_PER_CHANNEL_RPS` (`1`) and `AMG_RATE_LIMIT_PER_CHANNEL_BURST` (`5`) | No | Per-channel token bucket. Keep low; raising these without coordination will trip platform-side limits. |
+| `AMG_ATTACHMENT_RETENTION_DAYS` (`90`) | No | The attachment sweeper deletes re-hosted blobs older than this many days. |
 
-> **Where the `.env` file is loaded.** The adapter reads it at startup via `amc.core.auth.load_bearer_token()`. It is **not** auto-watched — change the file and restart the adapter (`amc service restart adapter`) for new values to take effect.
+> **Where the `.env` file is loaded.** The adapter reads it at startup via `amg.core.auth.load_bearer_token()`. It is **not** auto-watched — change the file and restart the adapter (`amg service restart adapter`) for new values to take effect.
 
 ---
 
@@ -161,7 +161,7 @@ Restrict permissions (the file may name people you'd rather not advertise):
 chmod 0600 ~/.config/messaging-agent/allowlist.toml
 ```
 
-> **The adapter refuses to start with a missing or malformed allowlist.** Spec §5.1 error handling. If you change the file while the adapter is running, send `SIGHUP` to reload in place (`kill -HUP "$(amc status adapter --json | jq -r '.pid')"`) — the adapter does not need a restart for allowlist edits.
+> **The adapter refuses to start with a missing or malformed allowlist.** Spec §5.1 error handling. If you change the file while the adapter is running, send `SIGHUP` to reload in place (`kill -HUP "$(amg status adapter --json | jq -r '.pid')"`) — the adapter does not need a restart for allowlist edits.
 
 ---
 
@@ -175,7 +175,7 @@ The Discord connector authenticates as a **bot user**, not as your personal acco
 2. Open the new application → **Bot** sidebar → **Add Bot** → confirm.
 3. Under **Privileged Gateway Intents**, enable **Message Content Intent**. Without this the gateway delivers `MESSAGE_CREATE` events with empty `content` and the connector cannot do anything useful. (Spec §5.1 calls this out explicitly.)
 4. Optional but recommended: disable **Public Bot** so nobody else can invite your bot to their servers.
-5. Click **Reset Token**, copy the token immediately, and paste it into `AMC_DISCORD_BOT_TOKEN=` in `~/.config/messaging-agent/.env`. The portal will not show this value again.
+5. Click **Reset Token**, copy the token immediately, and paste it into `AMG_DISCORD_BOT_TOKEN=` in `~/.config/messaging-agent/.env`. The portal will not show this value again.
 
 ### 5.2 Invite the bot to your server
 
@@ -212,7 +212,7 @@ The adapter runs as a normal user-space process on macOS, but the iMessage path 
 **Verify:**
 
 ```bash
-amc logs adapter
+amg logs adapter
 ```
 
 Look for a structured log line of the form:
@@ -249,7 +249,7 @@ If you see `state=error` with `errno=1` or a message containing `operation not p
 
 ```bash
 curl -X POST http://127.0.0.1:8080/messages/send \
-  -H "Authorization: Bearer $AMC_BEARER_TOKEN" \
+  -H "Authorization: Bearer $AMG_BEARER_TOKEN" \
   -H "X-Agent-ID: setup-check" \
   -H "Content-Type: application/json" \
   -d '{"channel_id":"imsg:+15551234567","text":"setup check"}'
@@ -266,7 +266,7 @@ Expected: HTTP 200 with a normalized envelope echo, and the message visibly appe
 - **Foreground wrapper** (simplest, recommended for development):
 
   ```bash
-  caffeinate -dimsu -- amc serve adapter
+  caffeinate -dimsu -- amg serve adapter
   ```
 
   Flags: `-d` prevent display sleep, `-i` prevent idle sleep, `-m` prevent disk sleep, `-s` prevent system sleep on AC power, `-u` declare user activity. The `--` separates `caffeinate` flags from the wrapped command.
@@ -308,21 +308,21 @@ Run the adapter in the foreground first so any startup errors land on your termi
 uv run alembic upgrade head
 ```
 
-This creates `~/Library/Application Support/messaging-agent/amc.db` (or wherever `AMC_DB_PATH` points) with the spec §7.3 schema: `messages`, `channels`, `senders`, `identity_links`, plus connector state and webhook delivery tables. Alembic prints `Running upgrade` lines for each migration; the final line is `INFO  [alembic.runtime.migration] Will assume non-transactional DDL.` followed by silence.
+This creates `~/Library/Application Support/messaging-agent/amg.db` (or wherever `AMG_DB_PATH` points) with the spec §7.3 schema: `messages`, `channels`, `senders`, `identity_links`, plus connector state and webhook delivery tables. Alembic prints `Running upgrade` lines for each migration; the final line is `INFO  [alembic.runtime.migration] Will assume non-transactional DDL.` followed by silence.
 
 To inspect afterwards:
 
 ```bash
-sqlite3 ~/Library/Application\ Support/messaging-agent/amc.db '.tables'
+sqlite3 ~/Library/Application\ Support/messaging-agent/amg.db '.tables'
 ```
 
 ### 7.2 Start the adapter
 
-Run the adapter in the foreground via the CLI (`amc serve adapter` execs
-`uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080` in-place):
+Run the adapter in the foreground via the CLI (`amg serve adapter` execs
+`uv run uvicorn amg.app:app --host 127.0.0.1 --port 8080` in-place):
 
 ```bash
-amc serve adapter
+amg serve adapter
 ```
 
 You should see structured log lines starting with `event=startup` and (within ~2 seconds) `event=connector_state component=discord_connector state=ok`. The iMessage connector logs `state=ok` only after FDA has been granted to the actual interpreter path (see §6.1).
@@ -332,8 +332,8 @@ You should see structured log lines starting with `event=startup` and (within ~2
 In a second terminal:
 
 ```bash
-export AMC_BEARER_TOKEN="$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-)"
-curl -sS -H "Authorization: Bearer $AMC_BEARER_TOKEN" http://127.0.0.1:8080/healthz | python3 -m json.tool
+export AMG_BEARER_TOKEN="$(grep ^AMG_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-)"
+curl -sS -H "Authorization: Bearer $AMG_BEARER_TOKEN" http://127.0.0.1:8080/healthz | python3 -m json.tool
 ```
 
 Expected response (HTTP 200):
@@ -361,23 +361,23 @@ Stop the foreground adapter with `Ctrl-C` once `/healthz` returns 200.
 
 ## 8. launchd Supervision
 
-For the adapter to survive logout, system sleep/wake, and crashes, install it as a per-user LaunchAgent. The plist templates live in `ops/launchd/`; the `amc` CLI is the install / lifecycle front end.
+For the adapter to survive logout, system sleep/wake, and crashes, install it as a per-user LaunchAgent. The plist templates live in `ops/launchd/`; the `amg` CLI is the install / lifecycle front end.
 
 ### 8.1 Install
 
 ```bash
-amc install
+amg install
 ```
 
-`amc install` (with no service name) installs every known service —
+`amg install` (with no service name) installs every known service —
 `adapter`, `receiver`, and `backup`. To install only specific services:
 
 ```bash
-amc install adapter           # adapter only
-amc install adapter receiver  # adapter + webhook receiver
+amg install adapter           # adapter only
+amg install adapter receiver  # adapter + webhook receiver
 ```
 
-Internally, `amc install` for each named service:
+Internally, `amg install` for each named service:
 
 1. Ensures `~/Library/Logs/messaging-agent/` exists (launchd will not create parent directories for `StandardOutPath`).
 2. Renders the template plist from `ops/launchd/` with your install dir and `$HOME` substituted in.
@@ -386,28 +386,28 @@ Internally, `amc install` for each named service:
 5. Bootstraps the service into the GUI user domain.
 6. Marks it enabled.
 
-Re-running is safe — `amc install` unloads any existing copy first.
+Re-running is safe — `amg install` unloads any existing copy first.
 
 Run the bundled health-check next to confirm the install is sound:
 
 ```bash
-amc doctor
+amg doctor
 ```
 
-`amc doctor` walks FDA, Automation, `.env` presence + mode, allowlist
+`amg doctor` walks FDA, Automation, `.env` presence + mode, allowlist
 presence, plist install state, service state, and `/healthz`.
 
 ### 8.2 Verify
 
 ```bash
-amc status adapter
+amg status adapter
 ```
 
 Look for `state = running` and a non-zero `pid`. Follow the launchd-level
 logs (process spawn output, not adapter structured logs):
 
 ```bash
-amc logs adapter --launchd
+amg logs adapter --launchd
 ```
 
 Re-run `curl /healthz` from §7.3 to confirm the launchd-spawned process is serving traffic.
@@ -426,20 +426,20 @@ This satisfies the spec §6.4 RTO target of ≤ 5 minutes after a process crash.
 
 ```bash
 # Restart in place (after a config change in ~/.config/messaging-agent/.env):
-amc service restart adapter
+amg service restart adapter
 
 # Stop / start without removing the install:
-amc service stop adapter
-amc service start adapter
+amg service stop adapter
+amg service start adapter
 
 # Uninstall (bootout + remove plist):
-amc uninstall adapter
+amg uninstall adapter
 
 # Uninstall but keep the plist on disk for inspection:
-amc uninstall adapter --keep-plist
+amg uninstall adapter --keep-plist
 ```
 
-> **Configuration belongs in `.env`, not the plist.** The `EnvironmentVariables` dict in the plist is intentionally empty. The adapter loads `~/.config/messaging-agent/.env` at startup, so a config change does not require reinstalling the LaunchAgent — `amc service restart adapter` is enough.
+> **Configuration belongs in `.env`, not the plist.** The `EnvironmentVariables` dict in the plist is intentionally empty. The adapter loads `~/.config/messaging-agent/.env` at startup, so a config change does not require reinstalling the LaunchAgent — `amg service restart adapter` is enough.
 
 ---
 
@@ -449,17 +449,17 @@ The MCP wrapper is a thin Python stdio process (built on the official `mcp` SDK 
 
 ### 9.1 Required environment variables
 
-The wrapper reads three env vars at startup (`mcp/src/amc_mcp/config.py`):
+The wrapper reads three env vars at startup (`mcp/src/amg_mcp/config.py`):
 
 | Variable | Required? | Notes |
 |----------|-----------|-------|
-| `AMC_BEARER_TOKEN` | **Yes** | Same value as in `~/.config/messaging-agent/.env`. |
-| `AMC_AGENT_ID` | **Yes** | Identifies this wrapper instance to the adapter. The adapter uses it as the `X-Agent-ID` header on every call, which scopes per-agent cursors (`/messages/unread` is per-agent in v1). Pick a stable, human-readable string per agent host: `claude-code-laptop`, `codex-cli`, `claude-desktop-default`. |
-| `AMC_BASE_URL` | No | Default `http://127.0.0.1:8080`. Override only if the adapter is on a different bind / port. |
+| `AMG_BEARER_TOKEN` | **Yes** | Same value as in `~/.config/messaging-agent/.env`. |
+| `AMG_AGENT_ID` | **Yes** | Identifies this wrapper instance to the adapter. The adapter uses it as the `X-Agent-ID` header on every call, which scopes per-agent cursors (`/messages/unread` is per-agent in v1). Pick a stable, human-readable string per agent host: `claude-code-laptop`, `codex-cli`, `claude-desktop-default`. |
+| `AMG_BASE_URL` | No | Default `http://127.0.0.1:8080`. Override only if the adapter is on a different bind / port. |
 
 ### 9.2 Wire into your MCP host
 
-The wrapper is invoked as `uv --directory /absolute/path/to/amc/mcp run amc-mcp` with the env vars above. (`uv` activates the workspace's `.venv` so the `amc-mcp` console script resolves without modifying the host's PATH.) Concrete examples follow; substitute your absolute install path.
+The wrapper is invoked as `uv --directory /absolute/path/to/amg/mcp run amg-mcp` with the env vars above. (`uv` activates the workspace's `.venv` so the `amg-mcp` console script resolves without modifying the host's PATH.) Concrete examples follow; substitute your absolute install path.
 
 #### Claude Desktop
 
@@ -468,20 +468,20 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json` and add a
 ```json
 {
   "mcpServers": {
-    "amc": {
+    "amg": {
       "command": "uv",
-      "args": ["--directory", "/Users/you/code/amc/mcp", "run", "amc-mcp"],
+      "args": ["--directory", "/Users/you/code/amg/mcp", "run", "amg-mcp"],
       "env": {
-        "AMC_BEARER_TOKEN": "<paste token from ~/.config/messaging-agent/.env>",
-        "AMC_AGENT_ID": "claude-desktop-default",
-        "AMC_BASE_URL": "http://127.0.0.1:8080"
+        "AMG_BEARER_TOKEN": "<paste token from ~/.config/messaging-agent/.env>",
+        "AMG_AGENT_ID": "claude-desktop-default",
+        "AMG_BASE_URL": "http://127.0.0.1:8080"
       }
     }
   }
 }
 ```
 
-Restart Claude Desktop. The four AMC tools should appear in the tool palette.
+Restart Claude Desktop. The four AMG tools should appear in the tool palette.
 
 #### Claude Code
 
@@ -490,37 +490,37 @@ Add a server entry to `~/.config/claude-code/mcp.json` (create the file if it do
 ```json
 {
   "mcpServers": {
-    "amc": {
+    "amg": {
       "command": "uv",
-      "args": ["--directory", "/Users/you/code/amc/mcp", "run", "amc-mcp"],
+      "args": ["--directory", "/Users/you/code/amg/mcp", "run", "amg-mcp"],
       "env": {
-        "AMC_BEARER_TOKEN": "<token>",
-        "AMC_AGENT_ID": "claude-code-laptop"
+        "AMG_BEARER_TOKEN": "<token>",
+        "AMG_AGENT_ID": "claude-code-laptop"
       }
     }
   }
 }
 ```
 
-Or run `claude mcp add amc uv -- --directory /Users/you/code/amc/mcp run amc-mcp` and then `claude mcp env amc set AMC_BEARER_TOKEN=... AMC_AGENT_ID=claude-code-laptop`.
+Or run `claude mcp add amg uv -- --directory /Users/you/code/amg/mcp run amg-mcp` and then `claude mcp env amg set AMG_BEARER_TOKEN=... AMG_AGENT_ID=claude-code-laptop`.
 
 #### Codex CLI
 
 Edit `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.amc]
+[mcp_servers.amg]
 command = "uv"
-args = ["--directory", "/Users/you/code/amc/mcp", "run", "amc-mcp"]
+args = ["--directory", "/Users/you/code/amg/mcp", "run", "amg-mcp"]
 
-[mcp_servers.amc.env]
-AMC_BEARER_TOKEN = "<token>"
-AMC_AGENT_ID = "codex-cli"
+[mcp_servers.amg.env]
+AMG_BEARER_TOKEN = "<token>"
+AMG_AGENT_ID = "codex-cli"
 ```
 
 #### Direct binary invocation
 
-If your MCP host doesn't tolerate `uv` as the spawn command, point it at the absolute venv path instead: `command = "/Users/you/code/amc/.venv/bin/amc-mcp"`. The console script imports `amc_mcp` from the venv and works identically. The `uv` form is preferred because it survives `uv sync --reinstall`.
+If your MCP host doesn't tolerate `uv` as the spawn command, point it at the absolute venv path instead: `command = "/Users/you/code/amg/.venv/bin/amg-mcp"`. The console script imports `amg_mcp` from the venv and works identically. The `uv` form is preferred because it survives `uv sync --reinstall`.
 
 ### 9.3 Smoke-test the wrapper outside an MCP host
 
@@ -528,18 +528,18 @@ Before debugging in your MCP host, confirm the wrapper itself works. Pipe an `in
 
 ```bash
 printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}\n' \
-  | AMC_BEARER_TOKEN=$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-) \
-    AMC_AGENT_ID=smoke-test \
-    uv --directory /Users/you/code/amc/mcp run amc-mcp \
+  | AMG_BEARER_TOKEN=$(grep ^AMG_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-) \
+    AMG_AGENT_ID=smoke-test \
+    uv --directory /Users/you/code/amg/mcp run amg-mcp \
   | head -1
 ```
 
-You should see a single JSON line containing `"serverInfo":{"name":"amc-mcp","version":"0.1.0"}`. If it instead prints `WrapperConfigError: Missing required env var(s): ...`, your env vars aren't reaching the process.
+You should see a single JSON line containing `"serverInfo":{"name":"amg-mcp","version":"0.1.0"}`. If it instead prints `WrapperConfigError: Missing required env var(s): ...`, your env vars aren't reaching the process.
 
 For an interactive end-to-end check, the official Anthropic Inspector still works (it spawns any MCP server and gives you a browser UI to click through tools):
 
 ```bash
-npx @modelcontextprotocol/inspector uv --directory /Users/you/code/amc/mcp run amc-mcp
+npx @modelcontextprotocol/inspector uv --directory /Users/you/code/amg/mcp run amg-mcp
 ```
 
 ---
@@ -551,7 +551,7 @@ A full deployment is verified by an inbound message arriving in `/messages/unrea
 Set a shell variable so the curl examples below are copy-pasteable:
 
 ```bash
-export AMC_BEARER_TOKEN="$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-)"
+export AMG_BEARER_TOKEN="$(grep ^AMG_BEARER_TOKEN ~/.config/messaging-agent/.env | cut -d= -f2-)"
 ```
 
 ### 10.1 Inbound (Discord)
@@ -561,7 +561,7 @@ export AMC_BEARER_TOKEN="$(grep ^AMC_BEARER_TOKEN ~/.config/messaging-agent/.env
 
    ```bash
    curl -sf \
-     -H "Authorization: Bearer $AMC_BEARER_TOKEN" \
+     -H "Authorization: Bearer $AMG_BEARER_TOKEN" \
      -H "X-Agent-ID: verify" \
      "http://127.0.0.1:8080/messages/unread?source=discord&limit=5" \
      | python3 -m json.tool
@@ -588,10 +588,10 @@ Pick a `message_id` from the `/messages/unread` response and reply. The simplest
 
 ```bash
 curl -X POST http://127.0.0.1:8080/messages/send \
-  -H "Authorization: Bearer $AMC_BEARER_TOKEN" \
+  -H "Authorization: Bearer $AMG_BEARER_TOKEN" \
   -H "X-Agent-ID: verify" \
   -H "Content-Type: application/json" \
-  -d '{"channel_id":"<channel_id from envelope>","text":"hello from amc"}'
+  -d '{"channel_id":"<channel_id from envelope>","text":"hello from amg"}'
 ```
 
 Expected: HTTP 200 with `{ "message_id": "msg_...", "sent_at": "..." }` and the message visible in the platform client (Discord channel or Messages.app conversation).
@@ -602,7 +602,7 @@ Once the agent has processed a message, it must mark it read so it doesn't reapp
 
 ```bash
 curl -X POST http://127.0.0.1:8080/messages/mark_read \
-  -H "Authorization: Bearer $AMC_BEARER_TOKEN" \
+  -H "Authorization: Bearer $AMG_BEARER_TOKEN" \
   -H "X-Agent-ID: verify" \
   -H "Content-Type: application/json" \
   -d '{"message_ids":["msg_..."]}'
@@ -621,14 +621,14 @@ Open your MCP host (e.g. Claude Desktop) and ask the agent something like *"What
 Per spec §11.1, the update procedure is:
 
 ```bash
-cd ~/code/amc        # or wherever you installed
+cd ~/code/amg        # or wherever you installed
 git pull
 uv sync --all-packages
 uv run alembic upgrade head
-amc service restart adapter
+amg service restart adapter
 ```
 
-Re-run `amc install` only if a plist template under `ops/launchd/` itself changed in the pull (`amc install` is idempotent).
+Re-run `amg install` only if a plist template under `ops/launchd/` itself changed in the pull (`amg install` is idempotent).
 
 **Rollback:**
 
@@ -636,7 +636,7 @@ Re-run `amc install` only if a plist template under `ops/launchd/` itself change
 uv run alembic downgrade -1   # if a migration is at fault
 git checkout <previous-sha>
 uv sync --all-packages
-amc service restart adapter
+amg service restart adapter
 ```
 
 ---
@@ -653,7 +653,7 @@ The full runbook lives in the [Operations Runbook](../operations/runbook.md). Qu
 | Send returns 200 but message never arrives on iMessage | Automation grant on the adapter's parent process (§6.2). |
 | Inbound iMessage stops after a long gap | Mac slept (§6.3); `pmset -g log \| grep -i sleep`. |
 | Webhooks all dead-lettered | Webhook URL reachable from the host; HMAC secret matches receiver; check `webhook_deliveries WHERE status='dead'`. |
-| Adapter won't start under launchd | `amc doctor`, then `amc logs adapter --launchd --no-follow`; usually a missing `.env`, missing `AMC_BEARER_TOKEN`, or absent allowlist file. |
-| MCP wrapper exits immediately | Missing `AMC_BEARER_TOKEN` or `AMC_AGENT_ID` in the host's `env` block; the wrapper logs `WrapperConfigError` to stderr. |
+| Adapter won't start under launchd | `amg doctor`, then `amg logs adapter --launchd --no-follow`; usually a missing `.env`, missing `AMG_BEARER_TOKEN`, or absent allowlist file. |
+| MCP wrapper exits immediately | Missing `AMG_BEARER_TOKEN` or `AMG_AGENT_ID` in the host's `env` block; the wrapper logs `WrapperConfigError` to stderr. |
 
 For anything not covered here, the structured JSON logs at `~/Library/Logs/messaging-agent/adapter-YYYY-MM-DD.log` are the source of truth — every component logs `event=` and `component=` fields you can grep on.
