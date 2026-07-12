@@ -39,7 +39,7 @@ from alembic.config import Config
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from amc.api.healthz import (
+from amg.api.healthz import (
     KNOWN_SOURCES,
     get_cached_version,
     load_version,
@@ -50,9 +50,9 @@ from amc.api.healthz import (
     reset_start_time,
     router,
 )
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.errors import register_exception_handlers
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.errors import register_exception_handlers
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -87,7 +87,7 @@ class FakeConnector:
 def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     path = tmp_path / "healthz.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(path))
+    monkeypatch.setenv("AMG_DB_PATH", str(path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     return path

@@ -1,4 +1,4 @@
-"""Tests for ``amc.cli.plist`` — the plist renderer module.
+"""Tests for ``amg.cli.plist`` — the plist renderer module.
 
 Spec references:
 * §5.3 Install — read template, substitute ``__INSTALL_DIR__`` /
@@ -6,7 +6,7 @@ Spec references:
   temp file in place.
 * §6.2 Security — substitution surface is limited to those two
   placeholders; other ``__X__`` tokens must remain untouched.
-* §7.1 Architecture — ``amc/cli/plist.py`` is the home of this pipeline.
+* §7.1 Architecture — ``amg/cli/plist.py`` is the home of this pipeline.
 
 Coverage:
 * Functional: only ``__INSTALL_DIR__`` and ``__HOME__`` are substituted;
@@ -35,13 +35,13 @@ from unittest.mock import patch
 
 import pytest
 
-from amc.cli.plist import (
+from amg.cli.plist import (
     PlistLintError,
     install_plist,
     lint_plist,
     render_plist,
 )
-from amc.cli.services import REGISTRY, Service
+from amg.cli.services import REGISTRY, Service
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +51,7 @@ _TEMPLATE_BODY = """<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>com.user.amc-test</string>
+    <string>com.user.amg-test</string>
     <key>WorkingDirectory</key>
     <string>__INSTALL_DIR__</string>
     <key>StandardOutPath</key>
@@ -110,11 +110,11 @@ def test_render_substitutes_install_dir_and_home(tmp_path: Path) -> None:
 
     out = render_plist(
         service,
-        install_dir=Path("/opt/amc"),
+        install_dir=Path("/opt/amg"),
         home=Path("/Users/operator"),
     )
 
-    assert "/opt/amc" in out
+    assert "/opt/amg" in out
     assert "/Users/operator/Library/Logs/messaging-agent/launchd-stdout.log" in out
     # Placeholders must be gone.
     assert "__INSTALL_DIR__" not in out
@@ -127,7 +127,7 @@ def test_render_leaves_other_double_underscore_tokens_alone(tmp_path: Path) -> N
 
     out = render_plist(
         service,
-        install_dir=Path("/opt/amc"),
+        install_dir=Path("/opt/amg"),
         home=Path("/Users/op"),
     )
 
@@ -141,8 +141,8 @@ def test_render_is_idempotent_for_identical_inputs(tmp_path: Path) -> None:
     template = _make_template(tmp_path)
     service = _make_service(template)
 
-    out1 = render_plist(service, install_dir=Path("/opt/amc"), home=Path("/Users/op"))
-    out2 = render_plist(service, install_dir=Path("/opt/amc"), home=Path("/Users/op"))
+    out1 = render_plist(service, install_dir=Path("/opt/amg"), home=Path("/Users/op"))
+    out2 = render_plist(service, install_dir=Path("/opt/amg"), home=Path("/Users/op"))
 
     # Byte-identical second render — substitution has no hidden state.
     assert out1 == out2
@@ -170,11 +170,11 @@ def test_render_substitution_handles_paths_with_special_chars(tmp_path: Path) ->
 
     out = render_plist(
         service,
-        install_dir=Path("/Users/foo+bar/$HOME/.amc"),
+        install_dir=Path("/Users/foo+bar/$HOME/.amg"),
         home=Path("/Users/foo+bar"),
     )
 
-    assert "/Users/foo+bar/$HOME/.amc" in out
+    assert "/Users/foo+bar/$HOME/.amg" in out
     assert "__INSTALL_DIR__" not in out
 
 
@@ -188,7 +188,7 @@ def test_lint_invokes_plutil_lint_and_returns_tmpfile_on_success(
 ) -> None:
     captured: list[list[str]] = []
     with patch(
-        "amc.cli.plist.subprocess.run",
+        "amg.cli.plist.subprocess.run",
         side_effect=_fake_run_factory(captured, returncode=0),
     ):
         path = lint_plist("<plist/>")
@@ -214,7 +214,7 @@ def test_lint_failure_raises_plist_lint_error_and_keeps_tmpfile(
     captured: list[list[str]] = []
     with (
         patch(
-            "amc.cli.plist.subprocess.run",
+            "amg.cli.plist.subprocess.run",
             side_effect=_fake_run_factory(captured, returncode=1, stderr="boom"),
         ),
         pytest.raises(PlistLintError) as exc_info,
@@ -242,11 +242,11 @@ def test_lint_failure_raises_plist_lint_error_and_keeps_tmpfile(
 
 
 def test_install_writes_dest_atomically(tmp_path: Path) -> None:
-    dest = tmp_path / "LaunchAgents" / "com.user.amc-test.plist"
+    dest = tmp_path / "LaunchAgents" / "com.user.amg-test.plist"
     captured: list[list[str]] = []
 
     with patch(
-        "amc.cli.plist.subprocess.run",
+        "amg.cli.plist.subprocess.run",
         side_effect=_fake_run_factory(captured, returncode=0),
     ):
         install_plist("<plist><contents/></plist>", dest)
@@ -266,11 +266,11 @@ def test_install_creates_missing_parent_directory(tmp_path: Path) -> None:
     # yet exist. install_plist must create it.
     parent = tmp_path / "Library" / "LaunchAgents"
     assert not parent.exists()
-    dest = parent / "com.user.amc-test.plist"
+    dest = parent / "com.user.amg-test.plist"
 
     captured: list[list[str]] = []
     with patch(
-        "amc.cli.plist.subprocess.run",
+        "amg.cli.plist.subprocess.run",
         side_effect=_fake_run_factory(captured, returncode=0),
     ):
         install_plist("<plist/>", dest)
@@ -284,12 +284,12 @@ def test_install_creates_missing_parent_directory(tmp_path: Path) -> None:
 def test_install_propagates_lint_failure_without_writing_dest(
     tmp_path: Path,
 ) -> None:
-    dest = tmp_path / "LaunchAgents" / "com.user.amc-test.plist"
+    dest = tmp_path / "LaunchAgents" / "com.user.amg-test.plist"
 
     captured: list[list[str]] = []
     with (
         patch(
-            "amc.cli.plist.subprocess.run",
+            "amg.cli.plist.subprocess.run",
             side_effect=_fake_run_factory(captured, returncode=1),
         ),
         pytest.raises(PlistLintError) as exc_info,
@@ -306,13 +306,13 @@ def test_install_propagates_lint_failure_without_writing_dest(
 
 
 def test_install_idempotent_overwrites_existing_dest(tmp_path: Path) -> None:
-    dest = tmp_path / "LaunchAgents" / "com.user.amc-test.plist"
+    dest = tmp_path / "LaunchAgents" / "com.user.amg-test.plist"
     dest.parent.mkdir(parents=True)
     dest.write_text("OLD CONTENTS", encoding="utf-8")
 
     captured: list[list[str]] = []
     with patch(
-        "amc.cli.plist.subprocess.run",
+        "amg.cli.plist.subprocess.run",
         side_effect=_fake_run_factory(captured, returncode=0),
     ):
         install_plist("<plist>NEW</plist>", dest)
@@ -323,11 +323,11 @@ def test_install_idempotent_overwrites_existing_dest(tmp_path: Path) -> None:
 def test_install_no_temp_file_leak_in_dest_parent_on_success(
     tmp_path: Path,
 ) -> None:
-    dest = tmp_path / "LaunchAgents" / "com.user.amc-test.plist"
+    dest = tmp_path / "LaunchAgents" / "com.user.amg-test.plist"
 
     captured: list[list[str]] = []
     with patch(
-        "amc.cli.plist.subprocess.run",
+        "amg.cli.plist.subprocess.run",
         side_effect=_fake_run_factory(captured, returncode=0),
     ):
         install_plist("<plist/>", dest)

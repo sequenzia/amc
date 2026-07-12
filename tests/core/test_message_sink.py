@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.message_sink`` (spec §5.1, §5.5, §5.7, OQ-2).
+"""Tests for ``amg.core.message_sink`` (spec §5.1, §5.5, §5.7, OQ-2).
 
 Coverage:
 
@@ -30,9 +30,9 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.core.allowlist import AllowlistEntry, AllowlistLoader
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import (
+from amg.core.allowlist import AllowlistEntry, AllowlistLoader
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import (
     Attachment,
     ChannelType,
     Direction,
@@ -40,13 +40,13 @@ from amc.core.envelope import (
     Sender,
     Source,
 )
-from amc.core.message_sink import MessageSink
-from amc.core.webhook import WebhookConfig
+from amg.core.message_sink import MessageSink
+from amg.core.webhook import WebhookConfig
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 
-WEBHOOK_URL = "https://receiver.example/hooks/amc"
+WEBHOOK_URL = "https://receiver.example/hooks/amg"
 WEBHOOK_SECRET = "shared-secret-1234567890"  # noqa: S105 - test fixture
 
 ALLOWED_HANDLE = "+15551234567"
@@ -80,7 +80,7 @@ class _FakeClock:
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """tmp_path SQLite file with the full schema applied via alembic."""
     db_path = tmp_path / "sink.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     yield db_path
@@ -297,7 +297,7 @@ async def test_outbound_creates_zero_webhook_rows(
 async def test_webhook_url_unset_creates_zero_rows_even_for_allowed_inbound(
     session_factory, fresh_db: Path, allowlist: AllowlistLoader, clock: _FakeClock
 ):
-    """AC: ``AMC_WEBHOOK_URL`` unset (``webhook_config=None``) → no rows."""
+    """AC: ``AMG_WEBHOOK_URL`` unset (``webhook_config=None``) → no rows."""
     sink = MessageSink(
         session_factory=session_factory,
         allowlist=allowlist,
@@ -556,7 +556,7 @@ async def test_url_snapshot_is_populated_on_enqueue(
 ):
     """The sink writes the per-delivery URL into the supplied snapshot map.
 
-    Verifies the integration with :func:`amc.core.webhook.enqueue_webhook` —
+    Verifies the integration with :func:`amg.core.webhook.enqueue_webhook` —
     once a row is enqueued, ``snapshot[delivery_id]`` must equal the
     configured URL so an in-flight retry uses the URL captured at queue
     time (spec §5.5 edge-case row "Webhook URL changes at runtime").

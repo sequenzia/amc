@@ -1,6 +1,6 @@
 """Reusable bounded stability-run harness (task #73; spec §3.2 / §6.1).
 
-Boots the *full* AMC stack against the Phase-0 fakes inside the test process,
+Boots the *full* AMG stack against the Phase-0 fakes inside the test process,
 drives a configurable load profile, captures latency / webhook / log metrics,
 and writes a JSON metrics summary the surrounding pytest can assert against.
 
@@ -37,11 +37,11 @@ Latency definitions
 Webhook receiver
 ----------------
 The harness boots an :class:`aiohttp.web.Application` on an ephemeral port
-that serves ``POST /hooks/amc``. Each request increments a counter; the
+that serves ``POST /hooks/amg``. Each request increments a counter; the
 first response is 200 by default but the test can switch the receiver to
 return ``failure_rate`` percent of the time as 500 (per task brief).
 
-The :class:`amc.core.webhook.WebhookWorker` runs in its real form against
+The :class:`amg.core.webhook.WebhookWorker` runs in its real form against
 this receiver — no respx interception, no monkey-patching, so the harness
 exercises the actual delivery path.
 """
@@ -71,13 +71,13 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from amc.api.messages_mark_read import (
+from amg.api.messages_mark_read import (
     configure_session_factory as configure_mark_read_session_factory,
 )
-from amc.api.messages_mark_read import (
+from amg.api.messages_mark_read import (
     reset_session_factory as reset_mark_read_session_factory,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_discord_connector,
     configure_imessage_connector,
     configure_rate_limiter,
@@ -85,34 +85,34 @@ from amc.api.messages_send import (
     reset_imessage_connector,
     reset_rate_limiter,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_session_factory as configure_send_session_factory,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     reset_session_factory as reset_send_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     configure_session_factory as configure_unread_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     reset_session_factory as reset_unread_session_factory,
 )
-from amc.app import build_app
-from amc.connectors.discord.connector import DiscordConnector
-from amc.connectors.imessage.connector import ImessageConnector
-from amc.connectors.imessage.reader import ChatDbReader
-from amc.core.allowlist import AllowlistEntry, AllowlistLoader
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.idempotency import (
+from amg.app import build_app
+from amg.connectors.discord.connector import DiscordConnector
+from amg.connectors.imessage.connector import ImessageConnector
+from amg.connectors.imessage.reader import ChatDbReader
+from amg.core.allowlist import AllowlistEntry, AllowlistLoader
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.idempotency import (
     IdempotencyStore,
     configure_idempotency_store,
     reset_idempotency_store,
 )
-from amc.core.message_sink import MessageSink
-from amc.core.rate_limit import RateLimiter
-from amc.core.webhook import WebhookConfig, WebhookWorker
+from amg.core.message_sink import MessageSink
+from amg.core.rate_limit import RateLimiter
+from amg.core.webhook import WebhookConfig, WebhookWorker
 from tests.fakes.applescript import FakeAppleScriptSender
 from tests.fakes.discord_gateway import FakeDiscordGateway
 from tests.fixtures.build_chat_db import ALLOWLISTED_HANDLE, ensure_chat_db
@@ -152,7 +152,7 @@ DEFAULT_PARALLEL_AGENTS = 5
 # Receive→visible measurement: how often an agent re-polls /messages/unread.
 AGENT_POLL_INTERVAL = 0.05
 
-# Hard cap for AMC_STABILITY_DURATION_SECONDS so an env override can't blow
+# Hard cap for AMG_STABILITY_DURATION_SECONDS so an env override can't blow
 # CI budgets accidentally — matches the task brief ("cap at 3600 for ad-hoc
 # longer runs").
 DURATION_CEILING_SECONDS = 3600
@@ -275,12 +275,12 @@ class _WebhookReceiver:
         self.failure_count: int = 0
         # delivery_id -> attempt-number-at-which-it-was-first-2xx (or None
         # if it never has). attempt-number is the value of the
-        # ``X-AMC-Attempt`` header (1-based per webhook.py).
+        # ``X-AMG-Attempt`` header (1-based per webhook.py).
         self.first_success_attempt: dict[str, int] = {}
         self.attempts_per_delivery: dict[str, int] = {}
 
         self._app = web.Application()
-        self._app.router.add_post("/hooks/amc", self._handle)
+        self._app.router.add_post("/hooks/amg", self._handle)
         self._runner: web.AppRunner | None = None
         self._site: web.TCPSite | None = None
         self._port: int | None = None
@@ -308,12 +308,12 @@ class _WebhookReceiver:
     def url(self) -> str:
         if self._port is None:
             raise RuntimeError("WebhookReceiver not started")
-        return f"http://127.0.0.1:{self._port}/hooks/amc"
+        return f"http://127.0.0.1:{self._port}/hooks/amg"
 
     async def _handle(self, request: web.Request) -> web.Response:
         """Record the attempt; return 200 or 500 based on the PRNG."""
-        delivery_id = request.headers.get("X-AMC-Delivery-Id", "")
-        attempt_header = request.headers.get("X-AMC-Attempt", "0")
+        delivery_id = request.headers.get("X-AMG-Delivery-Id", "")
+        attempt_header = request.headers.get("X-AMG-Attempt", "0")
         try:
             attempt = int(attempt_header)
         except ValueError:
@@ -535,16 +535,16 @@ class StabilityHarness:
 
     async def _boot(self) -> None:
         """Bring up every sub-component required for a stability run."""
-        # 1) Materialize a writable chat.db copy and a fresh AMC SQLite DB.
+        # 1) Materialize a writable chat.db copy and a fresh AMG SQLite DB.
         src_chat_db = ensure_chat_db()
         self._chat_db_path = self._tmp_dir / "chat.db"
         shutil.copy2(src_chat_db, self._chat_db_path)
 
-        self._db_path = self._tmp_dir / "amc-stability.db"
-        # alembic.command.upgrade reads AMC_DB_PATH via amc.core.db.
+        self._db_path = self._tmp_dir / "amg-stability.db"
+        # alembic.command.upgrade reads AMG_DB_PATH via amg.core.db.
         import os
 
-        os.environ["AMC_DB_PATH"] = str(self._db_path)
+        os.environ["AMG_DB_PATH"] = str(self._db_path)
         cfg = Config(str(ALEMBIC_INI))
         command.upgrade(cfg, "head")
 
@@ -684,7 +684,7 @@ class StabilityHarness:
         )
         discord_task = asyncio.create_task(
             discord_connector.start("fake-token-not-used"),
-            name="amc.stability.discord.start",
+            name="amg.stability.discord.start",
         )
         await self._await_discord_ready(discord_connector, discord_task)
 
@@ -903,7 +903,7 @@ class StabilityHarness:
         """
         assert self._live is not None
 
-        from amc.connectors.discord.connector import SendResult
+        from amg.connectors.discord.connector import SendResult
 
         async def _fake_send(*_args: Any, **_kwargs: Any) -> SendResult:
             return SendResult(

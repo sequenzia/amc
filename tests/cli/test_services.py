@@ -27,7 +27,7 @@ from pathlib import Path
 
 import pytest
 
-from amc.cli.services import REGISTRY, Service, UnknownServiceError, resolve_targets
+from amg.cli.services import REGISTRY, Service, UnknownServiceError, resolve_targets
 
 # ---------------------------------------------------------------------------
 # Registry contents
@@ -46,9 +46,9 @@ def test_adapter_entry_matches_spec() -> None:
     adapter = REGISTRY[0]
     assert isinstance(adapter, Service)
     assert adapter.name == "adapter"
-    assert adapter.label == "com.user.amc-adapter"
+    assert adapter.label == "com.user.amg-adapter"
     assert adapter.port == 8080
-    assert adapter.plist_template == Path("ops/launchd/com.user.amc-adapter.plist")
+    assert adapter.plist_template == Path("ops/launchd/com.user.amg-adapter.plist")
     assert adapter.run_script == Path("ops/launchd/run-adapter.sh")
     assert adapter.app_log_glob == "adapter-*.log"
     # launchd stdout/stderr live under ~/Library/Logs/messaging-agent/ per
@@ -62,9 +62,9 @@ def test_adapter_entry_matches_spec() -> None:
 def test_receiver_entry_matches_spec() -> None:
     receiver = REGISTRY[1]
     assert receiver.name == "receiver"
-    assert receiver.label == "com.user.amc-webhook-receiver"
+    assert receiver.label == "com.user.amg-webhook-receiver"
     assert receiver.port == 8090
-    assert receiver.plist_template == Path("ops/launchd/com.user.amc-webhook-receiver.plist")
+    assert receiver.plist_template == Path("ops/launchd/com.user.amg-webhook-receiver.plist")
     assert receiver.run_script == Path("ops/launchd/run-webhook-receiver.sh")
     assert receiver.app_log_glob == "receiver-*.log"
     log_dir = Path("~/Library/Logs/messaging-agent").expanduser()
@@ -75,10 +75,10 @@ def test_receiver_entry_matches_spec() -> None:
 def test_backup_entry_matches_spec() -> None:
     backup = REGISTRY[2]
     assert backup.name == "backup"
-    assert backup.label == "com.user.amc-backup"
+    assert backup.label == "com.user.amg-backup"
     # The backup service is a scheduled one-shot — it does not bind a port.
     assert backup.port is None
-    assert backup.plist_template == Path("ops/launchd/com.user.amc-backup.plist")
+    assert backup.plist_template == Path("ops/launchd/com.user.amg-backup.plist")
     assert backup.app_log_glob == "backup-*.log"
     log_dir = Path("~/Library/Logs/messaging-agent").expanduser()
     assert backup.launchd_stdout == log_dir / "launchd-backup-stdout.log"
@@ -104,7 +104,7 @@ def test_resolve_all_keyword_returns_every_service_in_order() -> None:
 
 def test_resolve_empty_list_returns_every_service_in_order() -> None:
     # Empty input is the convenience shorthand for ``all`` — used by every
-    # ``amc <verb>`` invocation that omits the target argument.
+    # ``amg <verb>`` invocation that omits the target argument.
     resolved = resolve_targets([])
     assert [s.name for s in resolved] == ["adapter", "receiver", "backup"]
 
@@ -116,13 +116,13 @@ def test_resolve_short_name_returns_single_service() -> None:
 
 
 def test_resolve_full_label_returns_single_service() -> None:
-    resolved = resolve_targets(["com.user.amc-webhook-receiver"])
+    resolved = resolve_targets(["com.user.amg-webhook-receiver"])
     assert len(resolved) == 1
     assert resolved[0].name == "receiver"
 
 
 def test_resolve_mixed_names_and_labels() -> None:
-    resolved = resolve_targets(["adapter", "com.user.amc-backup"])
+    resolved = resolve_targets(["adapter", "com.user.amg-backup"])
     assert [s.name for s in resolved] == ["adapter", "backup"]
 
 
@@ -134,7 +134,7 @@ def test_resolve_dedupes_preserving_order() -> None:
 def test_resolve_dedupes_across_short_name_and_label_forms() -> None:
     # The same service referred to once by short name and once by label
     # should collapse to a single entry.
-    resolved = resolve_targets(["adapter", "com.user.amc-adapter"])
+    resolved = resolve_targets(["adapter", "com.user.amg-adapter"])
     assert [s.name for s in resolved] == ["adapter"]
 
 

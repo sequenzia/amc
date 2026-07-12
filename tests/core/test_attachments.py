@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.attachments`` — local re-host store (spec §5.8).
+"""Tests for ``amg.core.attachments`` — local re-host store (spec §5.8).
 
 Coverage map (matches task #49 acceptance):
 
@@ -10,7 +10,7 @@ Coverage map (matches task #49 acceptance):
       will pull ``bind_url`` from config.
     - Caller-supplied mime wins; missing mime → :func:`mimetypes.guess_type`;
       unrecognized extension → :data:`FALLBACK_MIME`.
-    - Env var ``AMC_ATTACHMENT_DIR`` overrides the default.
+    - Env var ``AMG_ATTACHMENT_DIR`` overrides the default.
 
 * Edge cases / error handling (per spec §5.8 edge-case rows)
     - Source missing → log WARN; ``rehost`` returns ``None``; no file
@@ -23,7 +23,7 @@ Coverage map (matches task #49 acceptance):
 
 * ULID / id shape
     - Minted ids match the ``att_<26 Crockford base32>`` pattern shared
-      with :mod:`amc.core.envelope`.
+      with :mod:`amg.core.envelope`.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from unittest.mock import patch
 import pytest
 import structlog
 
-from amc.core.attachments import (
+from amg.core.attachments import (
     DEFAULT_BIND_URL,
     ENV_ATTACHMENT_DIR,
     FALLBACK_MIME,
@@ -45,7 +45,7 @@ from amc.core.attachments import (
     AttachmentStore,
     AttachmentStoreError,
 )
-from amc.core.envelope import ATT_ID_PATTERN
+from amg.core.envelope import ATT_ID_PATTERN
 
 
 @pytest.fixture
@@ -203,7 +203,7 @@ class TestConstruction:
             return False
 
         with (
-            patch("amc.core.attachments.os.access", side_effect=_no_write),
+            patch("amg.core.attachments.os.access", side_effect=_no_write),
             pytest.raises(AttachmentStoreError) as exc_info,
         ):
             AttachmentStore(existing)
@@ -256,9 +256,9 @@ class TestBindUrl:
         assert store.url_for("att_X") == "http://localhost:9999/attachments/att_X"
 
     def test_custom_bind_url_propagates(self, store_dir: Path) -> None:
-        store = AttachmentStore(store_dir, bind_url="https://amc.example.com")
+        store = AttachmentStore(store_dir, bind_url="https://amg.example.com")
 
-        assert store.url_for("att_id123") == "https://amc.example.com/attachments/att_id123"
+        assert store.url_for("att_id123") == "https://amg.example.com/attachments/att_id123"
 
 
 # ---------------------------------------------------------------------------
@@ -419,7 +419,7 @@ class TestRehostErrors:
     ) -> None:
         missing = tmp_path / "does-not-exist.png"
 
-        with caplog.at_level(logging.WARNING, logger="amc.attachments"):
+        with caplog.at_level(logging.WARNING, logger="amg.attachments"):
             row = await store.rehost(str(missing), mime="image/png")
 
         assert row is None
@@ -447,8 +447,8 @@ class TestRehostErrors:
             raise err
 
         with (
-            patch("amc.core.attachments._copy_file", side_effect=_enospc),
-            caplog.at_level(logging.WARNING, logger="amc.attachments"),
+            patch("amg.core.attachments._copy_file", side_effect=_enospc),
+            caplog.at_level(logging.WARNING, logger="amg.attachments"),
         ):
             row = await store.rehost(str(source_file), mime="image/png")
 
@@ -476,7 +476,7 @@ class TestRehostErrors:
             err.errno = errno.ENOSPC
             raise err
 
-        with patch("amc.core.attachments._copy_file", side_effect=_partial_then_fail):
+        with patch("amg.core.attachments._copy_file", side_effect=_partial_then_fail):
             row = await store.rehost(str(source_file), mime="image/png")
 
         assert row is None
@@ -492,10 +492,10 @@ class TestRehostErrors:
     ) -> None:
         with (
             patch(
-                "amc.core.attachments._copy_file",
+                "amg.core.attachments._copy_file",
                 side_effect=PermissionError("can't read source"),
             ),
-            caplog.at_level(logging.WARNING, logger="amc.attachments"),
+            caplog.at_level(logging.WARNING, logger="amg.attachments"),
         ):
             row = await store.rehost(str(source_file), mime="image/png")
 

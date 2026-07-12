@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from amc_mcp.config import reset_config
+from amg_mcp.config import reset_config
 
 
 @pytest.fixture(autouse=True)

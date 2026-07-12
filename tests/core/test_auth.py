@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.auth`` — bearer auth + ``X-Agent-ID`` dependencies.
+"""Tests for ``amg.core.auth`` — bearer auth + ``X-Agent-ID`` dependencies.
 
 Covers spec §6.2 (Authentication) and §7.4 (header table). Uses a minimal in-test
 FastAPI app so that no top-level adapter entry point is required yet.
@@ -15,7 +15,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 
-from amc.core.auth import (
+from amg.core.auth import (
     DEFAULT_ENV_PATH,
     _parse_bearer,
     configure_bearer_token,
@@ -211,7 +211,7 @@ def test_token_comparison_uses_constant_time_compare(client: TestClient) -> None
     """Verify ``secrets.compare_digest`` is invoked on the comparison path so the
     behaviour is provably constant-time. Direct timing measurement is unreliable in
     a unit test; spying on ``compare_digest`` proves the implementation choice."""
-    with patch("amc.core.auth.secrets.compare_digest", wraps=secrets.compare_digest) as spy:
+    with patch("amg.core.auth.secrets.compare_digest", wraps=secrets.compare_digest) as spy:
         # Mismatched lengths must still go through compare_digest, not == /short-circuit.
         response = client.get("/agent-only", headers={"Authorization": "Bearer x"})
         assert response.status_code == 401
@@ -225,7 +225,7 @@ def test_token_comparison_uses_constant_time_compare(client: TestClient) -> None
 def test_compare_digest_runs_even_when_header_missing(client: TestClient) -> None:
     """Avoid early-return timing leak: even a missing header should hit compare_digest
     so the two failure paths take similar time."""
-    with patch("amc.core.auth.secrets.compare_digest", wraps=secrets.compare_digest) as spy:
+    with patch("amg.core.auth.secrets.compare_digest", wraps=secrets.compare_digest) as spy:
         response = client.get("/agent-only")
         assert response.status_code == 401
         assert spy.call_count >= 1
@@ -238,7 +238,7 @@ def test_compare_digest_runs_even_when_header_missing(client: TestClient) -> Non
 
 def test_load_bearer_token_from_env_file(tmp_path: Path) -> None:
     env_file = tmp_path / ".env"
-    env_file.write_text(f'AMC_BEARER_TOKEN="{VALID_TOKEN}"\n')
+    env_file.write_text(f'AMG_BEARER_TOKEN="{VALID_TOKEN}"\n')
 
     token = load_bearer_token(env_path=env_file)
 
@@ -250,7 +250,7 @@ def test_load_bearer_token_falls_back_to_process_env(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     missing = tmp_path / "does-not-exist.env"
-    monkeypatch.setenv("AMC_BEARER_TOKEN", VALID_TOKEN)
+    monkeypatch.setenv("AMG_BEARER_TOKEN", VALID_TOKEN)
 
     token = load_bearer_token(env_path=missing)
 
@@ -261,9 +261,9 @@ def test_load_bearer_token_raises_when_missing_everywhere(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     missing = tmp_path / "does-not-exist.env"
-    monkeypatch.delenv("AMC_BEARER_TOKEN", raising=False)
+    monkeypatch.delenv("AMG_BEARER_TOKEN", raising=False)
 
-    with pytest.raises(RuntimeError, match="AMC_BEARER_TOKEN is not set"):
+    with pytest.raises(RuntimeError, match="AMG_BEARER_TOKEN is not set"):
         load_bearer_token(env_path=missing)
 
 
@@ -271,10 +271,10 @@ def test_load_bearer_token_raises_when_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     env_file = tmp_path / ".env"
-    env_file.write_text('AMC_BEARER_TOKEN=""\n')
-    monkeypatch.delenv("AMC_BEARER_TOKEN", raising=False)
+    env_file.write_text('AMG_BEARER_TOKEN=""\n')
+    monkeypatch.delenv("AMG_BEARER_TOKEN", raising=False)
 
-    with pytest.raises(RuntimeError, match="AMC_BEARER_TOKEN is not set"):
+    with pytest.raises(RuntimeError, match="AMG_BEARER_TOKEN is not set"):
         load_bearer_token(env_path=env_file)
 
 

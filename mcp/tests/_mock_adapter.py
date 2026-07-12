@@ -1,8 +1,8 @@
-"""In-process mock AMC adapter for the wrapper e2e harness.
+"""In-process mock AMG adapter for the wrapper e2e harness.
 
 Boots a tiny stdlib HTTP server on an ephemeral loopback port, with
 queueable canned responses per path. Used by the stdio e2e test that
-spawns the real ``amc-mcp`` binary and points it at the mock URL.
+spawns the real ``amg-mcp`` binary and points it at the mock URL.
 """
 
 from __future__ import annotations

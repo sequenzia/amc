@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from amc_receiver.dispatcher import ChannelDispatcher, DeliveryDedupe
+from amg_receiver.dispatcher import ChannelDispatcher, DeliveryDedupe
 
 # ---------------------------------------------------------------------------
 # DeliveryDedupe

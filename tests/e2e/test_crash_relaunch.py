@@ -14,12 +14,12 @@ Scenario
 
 1. Build a fresh SQLite DB (``alembic upgrade head``).
 2. Start a :class:`tests.fakes.discord_gateway.FakeDiscordGateway`,
-   start a real :class:`amc.connectors.discord.connector.DiscordConnector`
+   start a real :class:`amg.connectors.discord.connector.DiscordConnector`
    pointed at it, and start a real
-   :class:`amc.connectors.imessage.connector.ImessageConnector` pointed
+   :class:`amg.connectors.imessage.connector.ImessageConnector` pointed
    at a writable copy of the Phase 0 chat.db fixture. Both connectors
-   share one :class:`amc.core.message_sink.MessageSink` and one
-   :class:`amc.core.webhook.WebhookConfig`.
+   share one :class:`amg.core.message_sink.MessageSink` and one
+   :class:`amg.core.webhook.WebhookConfig`.
 3. Inject 9 inbound messages interleaved across the two transports
    (5 Discord MESSAGE_CREATE + 4 chat.db rows). After the first 5 are
    persisted, fire one ``POST /messages/send`` to drive the outbound
@@ -49,7 +49,7 @@ explicitly notes that the in-process simulation "stresses the same
 DB-state-recovery code paths without OS process management". We take
 the in-process path because:
 
-* :mod:`amc.app` does not yet wire the DB lifespan or the connectors
+* :mod:`amg.app` does not yet wire the DB lifespan or the connectors
   (see the docstring -- "wiring lifespan that loads the bearer token,
   opens the DB pool, hydrates the allowlist, and starts the webhook +
   connector workers" is explicitly future work). A subprocess uvicorn
@@ -79,39 +79,39 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
 
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_discord_connector,
     configure_rate_limiter,
     reset_discord_connector,
     reset_rate_limiter,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     configure_session_factory as configure_send_session_factory,
 )
-from amc.api.messages_send import (
+from amg.api.messages_send import (
     reset_session_factory as reset_send_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     configure_session_factory as configure_unread_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     reset_session_factory as reset_unread_session_factory,
 )
-from amc.app import build_app
-from amc.connectors.discord.connector import DiscordConnector
-from amc.connectors.imessage.connector import ImessageConnector
-from amc.connectors.imessage.reader import ChatDbReader
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.idempotency import (
+from amg.app import build_app
+from amg.connectors.discord.connector import DiscordConnector
+from amg.connectors.imessage.connector import ImessageConnector
+from amg.connectors.imessage.reader import ChatDbReader
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.idempotency import (
     IdempotencyStore,
     configure_idempotency_store,
     reset_idempotency_store,
 )
-from amc.core.message_sink import MessageSink
-from amc.core.rate_limit import RateLimiter
-from amc.core.webhook import WebhookConfig
+from amg.core.message_sink import MessageSink
+from amg.core.rate_limit import RateLimiter
+from amg.core.webhook import WebhookConfig
 from tests.e2e._helpers import (
     append_chat_db_inbound_row,
     apply_alembic_head,
@@ -140,7 +140,7 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 BEARER = "test-bearer-e2e-crash-relaunch"  # noqa: S105 -- test fixture
 AGENT_ID = "agent-e2e-crash-relaunch"
 
-WEBHOOK_URL = "https://receiver.example/hooks/amc-crash-test"
+WEBHOOK_URL = "https://receiver.example/hooks/amg-crash-test"
 WEBHOOK_SECRET = "shared-secret-crash-relaunch"  # noqa: S105 -- test fixture
 
 # Allowlisted Discord user we drive in the test.
@@ -186,7 +186,7 @@ async def _start_live_system(
 ) -> _LiveSystem:
     """Wire up + start every component.
 
-    Mirrors what an eventual ``amc.app`` lifespan hook will do once
+    Mirrors what an eventual ``amg.app`` lifespan hook will do once
     task #41 lands: build the engine, build the sink + connectors, register
     them with the messages_send / messages_unread routers, and start the
     background tasks.
@@ -226,7 +226,7 @@ async def _start_live_system(
     )
     discord_task = asyncio.create_task(
         discord_connector.start("fake-token-not-used"),
-        name="amc.test.discord.start",
+        name="amg.test.discord.start",
     )
     await _await_discord_ready(discord_connector, discord_task)
 
@@ -386,8 +386,8 @@ def chat_db_copy(src_chat_db_path: Path, tmp_path: Path) -> Path:
 @pytest.fixture
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Fresh SQLite file with the full migrations applied."""
-    db_path = tmp_path / "amc-crash-relaunch.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    db_path = tmp_path / "amg-crash-relaunch.db"
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     apply_alembic_head(ALEMBIC_INI, db_path)
     yield db_path
 
@@ -557,7 +557,7 @@ async def test_crash_relaunch_preserves_state_and_resumes_within_rto(
         # return a synthetic SendResult. (The connector's real `send` would
         # try to look up the channel cache, which the fake gateway does
         # not populate.)
-        from amc.connectors.discord.connector import SendResult
+        from amg.connectors.discord.connector import SendResult
 
         async def _fake_send(*_args, **_kwargs) -> SendResult:
             return SendResult(

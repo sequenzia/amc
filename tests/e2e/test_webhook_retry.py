@@ -5,16 +5,16 @@ schedule), §7.4.1 (``GET /messages/unread``), §7.4.11 (header table).
 
 Scenario walked end-to-end:
 
-1. The full :mod:`amc.app` FastAPI app is booted against a fresh SQLite
+1. The full :mod:`amg.app` FastAPI app is booted against a fresh SQLite
    DB created via ``alembic upgrade head``.
-2. A real :class:`amc.connectors.discord.connector.DiscordConnector`,
+2. A real :class:`amg.connectors.discord.connector.DiscordConnector`,
    pointed at the in-process :class:`tests.fakes.discord_gateway.FakeDiscordGateway`,
    delivers one allowlisted ``MESSAGE_CREATE`` payload. The connector
    pushes the normalized envelope through a real
-   :class:`amc.core.message_sink.MessageSink`, which persists the row
+   :class:`amg.core.message_sink.MessageSink`, which persists the row
    AND enqueues the matching ``webhook_deliveries`` row in the same
    transaction (spec §5.5 acceptance criteria).
-3. A :class:`amc.core.webhook.WebhookWorker` with an injectable
+3. A :class:`amg.core.webhook.WebhookWorker` with an injectable
    ``time_provider`` ticks the queue. ``respx`` intercepts the outbound
    ``httpx.AsyncClient`` POSTs so we can return crafted status codes.
 
@@ -56,20 +56,20 @@ from alembic.config import Config
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     configure_session_factory as configure_unread_session_factory,
 )
-from amc.api.messages_unread import (
+from amg.api.messages_unread import (
     reset_session_factory as reset_unread_session_factory,
 )
-from amc.app import build_app
-from amc.connectors.discord.connector import DiscordConnector
-from amc.core.allowlist import AllowlistEntry, AllowlistLoader
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.message_sink import MessageSink
-from amc.core.webhook import (
+from amg.app import build_app
+from amg.connectors.discord.connector import DiscordConnector
+from amg.core.allowlist import AllowlistEntry, AllowlistLoader
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.message_sink import MessageSink
+from amg.core.webhook import (
     BACKOFF_SECONDS,
     MAX_ATTEMPTS,
     WebhookConfig,
@@ -87,7 +87,7 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 BEARER = "test-bearer-e2e-webhook-retry"
 AGENT_ID = "agent-e2e"
 
-WEBHOOK_URL = "https://receiver.example/hooks/amc"
+WEBHOOK_URL = "https://receiver.example/hooks/amg"
 WEBHOOK_SECRET = "shared-secret-e2e-webhook-retry"  # noqa: S105 - test fixture
 
 ALLOWED_USER_ID = "999888777666555444"
@@ -146,7 +146,7 @@ def _build_allowlist() -> AllowlistLoader:
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     db_path = tmp_path / "webhook-retry.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     yield db_path
@@ -176,7 +176,7 @@ def _reset_module_globals() -> Iterator[None]:
 
 @pytest.fixture
 def adapter_client(session_factory: async_sessionmaker) -> Iterator[TestClient]:
-    """Boot the full :mod:`amc.app` adapter with bearer + DB wired up."""
+    """Boot the full :mod:`amg.app` adapter with bearer + DB wired up."""
     configure_bearer_token(BEARER)
     configure_unread_session_factory(session_factory)
 
@@ -228,7 +228,7 @@ class _ListHandler(logging.Handler):
 def _structlog_bridge() -> Iterator[None]:
     """Install the structlog→stdlib bridge once per test module.
 
-    The webhook worker emits via ``structlog.get_logger("amc.webhook")``,
+    The webhook worker emits via ``structlog.get_logger("amg.webhook")``,
     which returns a :class:`structlog._config.BoundLoggerLazyProxy` that
     caches its resolved bound logger on first call. Reconfiguring or
     resetting structlog mid-test breaks subsequent calls on the cached
@@ -244,7 +244,7 @@ def _structlog_bridge() -> Iterator[None]:
 
 @pytest.fixture
 def webhook_logs() -> Iterator[_ListHandler]:
-    """Attach a per-test capture handler to the ``amc.webhook`` logger.
+    """Attach a per-test capture handler to the ``amg.webhook`` logger.
 
     Yields a :class:`_ListHandler` whose ``records`` attribute holds every
     log record emitted by the webhook worker during the test. Restores
@@ -255,11 +255,11 @@ def webhook_logs() -> Iterator[_ListHandler]:
     invokes :func:`logging.config.fileConfig` with the default
     ``disable_existing_loggers=True``. That flag flips
     ``logger.disabled = True`` on every logger created before the call,
-    so once the ``amc.webhook`` logger has been instantiated (e.g. by
+    so once the ``amg.webhook`` logger has been instantiated (e.g. by
     the first test in this module), every subsequent ``alembic upgrade``
     silently mutes it. We re-enable it here so per-test capture works.
     """
-    webhook_logger = logging.getLogger("amc.webhook")
+    webhook_logger = logging.getLogger("amg.webhook")
     prev_level = webhook_logger.level
     prev_propagate = webhook_logger.propagate
     prev_disabled = webhook_logger.disabled

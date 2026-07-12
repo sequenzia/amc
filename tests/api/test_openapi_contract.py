@@ -11,7 +11,7 @@ Spec references:
 How it works
 ------------
 
-1. Boot the app via :func:`amc.app.build_app`, configure the bearer token,
+1. Boot the app via :func:`amg.app.build_app`, configure the bearer token,
    and ``GET /openapi.json`` with the bearer header.
 2. Normalize the JSON deterministically: recursively sort all dict keys
    and sort lists whose order doesn't carry semantic meaning (parameter
@@ -40,8 +40,8 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
-from amc.app import build_app
-from amc.core.auth import configure_bearer_token, reset_bearer_token
+from amg.app import build_app
+from amg.core.auth import configure_bearer_token, reset_bearer_token
 
 GOLDEN_PATH = Path(__file__).resolve().parent / "golden" / "openapi.json"
 BEARER = "tok-openapi-contract-deadbeefdeadbeefdeadbe"

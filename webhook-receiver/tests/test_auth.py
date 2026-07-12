@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from amc_receiver.auth import compute_signature, verify_signature
+from amg_receiver.auth import compute_signature, verify_signature
 
 SECRET = "super-secret-test-key"  # noqa: S105 — test fixture
 BODY = b'{"hello":"world"}'

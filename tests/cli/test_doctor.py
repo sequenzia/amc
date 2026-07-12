@@ -1,4 +1,4 @@
-"""Tests for ``amc doctor`` (spec §5.8).
+"""Tests for ``amg doctor`` (spec §5.8).
 
 Coverage:
 * Each individual check function returns the documented status for each
@@ -12,7 +12,7 @@ Coverage:
 * ``run_doctor(json_mode=True)`` emits JSON-parseable output with the
   required field shape (Functional).
 * Exit-code matrix: all ok/warn → 0; any fail → 2 (Functional).
-* The ``amc doctor`` Typer command surfaces the exit code (Integration).
+* The ``amg doctor`` Typer command surfaces the exit code (Integration).
 
 Strategy:
 * Patch module attributes (``CHAT_DB_PATH``, ``ENV_PATH``,
@@ -38,12 +38,13 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from amc.cli import doctor
-from amc.cli.app import app
-from amc.cli.doctor import (
+from amg.cli import doctor
+from amg.cli.app import app
+from amg.cli.doctor import (
     check_chat_db_readable,
     check_env_file,
     check_log_dir_writable,
+    check_no_legacy_env_keys,
     check_plist_templates_exist,
     check_plists_installed,
     check_port_available,
@@ -52,7 +53,7 @@ from amc.cli.doctor import (
     run_checks,
     run_doctor,
 )
-from amc.cli.services import REGISTRY
+from amg.cli.services import REGISTRY
 
 runner = CliRunner()
 
@@ -83,7 +84,7 @@ def test_check_uv_on_path_missing(monkeypatch: pytest.MonkeyPatch) -> None:
 
 def test_check_env_file_ok(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     env = tmp_path / ".env"
-    env.write_text("AMC_BEARER_TOKEN=abc\n")
+    env.write_text("AMG_BEARER_TOKEN=abc\n")
     monkeypatch.setattr(doctor, "ENV_PATH", env)
     status, details = check_env_file()
     assert status == "ok"
@@ -108,6 +109,122 @@ def test_check_env_file_unreadable(monkeypatch: pytest.MonkeyPatch, tmp_path: Pa
     status, details = check_env_file()
     assert status == "fail"
     assert "not readable" in details
+
+
+# ---------------------------------------------------------------------------
+# check_no_legacy_env_keys
+# ---------------------------------------------------------------------------
+
+
+def _legacy_env(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    *,
+    file_contents: str = "",
+    environ: dict[str, str] | None = None,
+) -> Path:
+    """Point the check at a scratch .env and a controlled process environment.
+
+    ``os.environ`` is replaced wholesale rather than scrubbed key-by-key, so
+    the result cannot depend on whatever the developer happens to have
+    exported in their shell.
+    """
+    env = tmp_path / ".env"
+    env.write_text(file_contents)
+    monkeypatch.setattr(doctor, "ENV_PATH", env)
+    monkeypatch.setattr(doctor.os, "environ", environ if environ is not None else {})
+    return env
+
+
+def test_no_legacy_env_keys_ok_when_all_renamed(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _legacy_env(
+        monkeypatch,
+        tmp_path,
+        file_contents="AMG_BEARER_TOKEN=abc\nAMG_RATE_LIMIT_PER_CHANNEL_RPS=1\n",
+        environ={"AMG_BEARER_TOKEN": "abc"},
+    )
+    status, details = check_no_legacy_env_keys()
+    assert status == "ok"
+    assert "no AMC_* keys" in details
+
+
+def test_no_legacy_env_keys_fails_and_never_leaks_the_value(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _legacy_env(monkeypatch, tmp_path, file_contents="AMC_BEARER_TOKEN=s3cret-do-not-print\n")
+    status, details = check_no_legacy_env_keys()
+    assert status == "fail"
+    assert "AMC_BEARER_TOKEN" in details
+    assert "s3cret-do-not-print" not in details
+
+
+def test_no_legacy_env_keys_detects_export_form(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _legacy_env(monkeypatch, tmp_path, file_contents="export AMC_DB_PATH=/tmp/x.db\n")
+    status, details = check_no_legacy_env_keys()
+    assert status == "fail"
+    assert "AMC_DB_PATH" in details
+
+
+def test_no_legacy_env_keys_ignores_comments(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _legacy_env(
+        monkeypatch,
+        tmp_path,
+        file_contents="# AMC_BEARER_TOKEN was renamed to AMG_BEARER_TOKEN\nAMG_BEARER_TOKEN=abc\n",
+    )
+    status, _ = check_no_legacy_env_keys()
+    assert status == "ok"
+
+
+def test_no_legacy_env_keys_detects_stale_process_env(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A clean .env is not enough: a stale shell export must also trip."""
+    _legacy_env(
+        monkeypatch,
+        tmp_path,
+        file_contents="AMG_BEARER_TOKEN=abc\n",
+        environ={"AMC_WEBHOOK_URL": "http://127.0.0.1:8090/webhook"},
+    )
+    status, details = check_no_legacy_env_keys()
+    assert status == "fail"
+    assert "AMC_WEBHOOK_URL" in details
+
+
+def test_no_legacy_env_keys_detects_stale_shell_completion(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """``_AMC_COMPLETE`` is exported by a completion installed as `amc`."""
+    _legacy_env(monkeypatch, tmp_path, environ={"_AMC_COMPLETE": "zsh_complete"})
+    status, details = check_no_legacy_env_keys()
+    assert status == "fail"
+    assert "_AMC_COMPLETE" in details
+
+
+def test_no_legacy_env_keys_ok_when_env_file_missing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A missing .env is check_env_file's failure to report, not this one's."""
+    monkeypatch.setattr(doctor, "ENV_PATH", tmp_path / "does-not-exist.env")
+    monkeypatch.setattr(doctor.os, "environ", {})
+    status, _ = check_no_legacy_env_keys()
+    assert status == "ok"
+
+
+def test_no_legacy_env_keys_truncates_long_lists(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    keys = [f"AMC_KEY_{i}" for i in range(9)]
+    _legacy_env(monkeypatch, tmp_path, file_contents="".join(f"{k}=v\n" for k in keys))
+    status, details = check_no_legacy_env_keys()
+    assert status == "fail"
+    assert "9 legacy key(s)" in details
+    assert "(+3 more)" in details
 
 
 # ---------------------------------------------------------------------------
@@ -439,7 +556,7 @@ def test_run_doctor_exit_code_matrix(statuses: list[str], expected_code: int) ->
 # ---------------------------------------------------------------------------
 
 
-def test_amc_doctor_command_runs_and_returns_an_exit_code(
+def test_amg_doctor_command_runs_and_returns_an_exit_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """End-to-end via the Typer app.
@@ -459,13 +576,13 @@ def test_amc_doctor_command_runs_and_returns_an_exit_code(
             out.write("[]\n")
         return 0
 
-    monkeypatch.setattr("amc.cli.doctor.run_doctor", fake_run_doctor)
+    monkeypatch.setattr("amg.cli.doctor.run_doctor", fake_run_doctor)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 0
     assert captured["json_mode"] is False
 
 
-def test_amc_doctor_command_forwards_json_flag(
+def test_amg_doctor_command_forwards_json_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
@@ -474,18 +591,18 @@ def test_amc_doctor_command_forwards_json_flag(
         captured["json_mode"] = json_mode
         return 0
 
-    monkeypatch.setattr("amc.cli.doctor.run_doctor", fake_run_doctor)
+    monkeypatch.setattr("amg.cli.doctor.run_doctor", fake_run_doctor)
     result = runner.invoke(app, ["doctor", "--json"])
     assert result.exit_code == 0
     assert captured["json_mode"] is True
 
 
-def test_amc_doctor_command_propagates_failure_exit_code(
+def test_amg_doctor_command_propagates_failure_exit_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def fake_run_doctor(*, json_mode: bool = False, stream: Any = None) -> int:
         return 2
 
-    monkeypatch.setattr("amc.cli.doctor.run_doctor", fake_run_doctor)
+    monkeypatch.setattr("amg.cli.doctor.run_doctor", fake_run_doctor)
     result = runner.invoke(app, ["doctor"])
     assert result.exit_code == 2

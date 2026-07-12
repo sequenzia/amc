@@ -4,44 +4,44 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Repository State
 
-**v1 implementation complete (2026-05-03; MCP wrapper ported from TypeScript to Python 2026-05-09; Typer `amc` CLI replaced `ops/launchd/install.sh` 2026-05-11).** Full Python adapter (FastAPI + SQLAlchemy + Alembic) + iMessage and Discord connectors + Python MCP wrapper (uv workspace member at `mcp/`) + `amc` operator CLI (`amc/cli/`, Typer + Rich) + tests + docs. The spec (`specs/agent-messaging-channel-SPEC.md`) is the source of truth for v1; the CLI spec is `specs/amc-cli-SPEC.md`; the blueprint (`internal/blueprints/agent-messaging-channel.md`) has been reconciled twice.
+**v1 implementation complete (2026-05-03; MCP wrapper ported from TypeScript to Python 2026-05-09; Typer `amg` CLI replaced `ops/launchd/install.sh` 2026-05-11).** Full Python adapter (FastAPI + SQLAlchemy + Alembic) + iMessage and Discord connectors + Python MCP wrapper (uv workspace member at `mcp/`) + `amg` operator CLI (`amg/cli/`, Typer + Rich) + tests + docs. The spec (`specs/agent-messaging-gateway-SPEC.md`) is the source of truth for v1; the CLI spec is `specs/amg-cli-SPEC.md`; the blueprint (`internal/blueprints/agent-messaging-gateway.md`) has been reconciled twice.
 
 ### Build / lint / test commands
 
 **Adapter (root):**
 - Install all (incl. wrapper): `uv sync --all-packages`
-- Run app: `uv run uvicorn amc.app:app --host 127.0.0.1 --port 8080`
+- Run app: `uv run uvicorn amg.app:app --host 127.0.0.1 --port 8080`
 - Migrate: `uv run alembic upgrade head`
 - Lint: `uv run ruff check . && uv run ruff format --check .`
 - Test: `uv run pytest` (full suite); `uv run pytest tests/{unit-path}` for scoped
-- Stability: `uv run pytest tests/stability/test_stability_run.py` (default 60s; `AMC_STABILITY_DURATION_SECONDS=1800` for 30 min)
+- Stability: `uv run pytest tests/stability/test_stability_run.py` (default 60s; `AMG_STABILITY_DURATION_SECONDS=1800` for 30 min)
 - Docs lint: `make docs-lint` (or `uv run python scripts/docs_lint.py`)
 - Docs site: MkDocs Material under `docs/` (config `mkdocs.yml`). Install deps `uv sync --group docs`; preview `uv run mkdocs serve`; validate `uv run mkdocs build --strict`. The former root docs were migrated into the site (2026-05-31): `SETUP.md`→`docs/getting-started/index.md`, `RUNBOOK.md`→`docs/operations/runbook.md`, `docs/API.md`→`docs/reference/{rest-api,mcp-tools}.md`. `docs_lint.py` now globs `docs/**/*.md` so every site page is gated. Note: MkDocs `toc` and `docs_lint` slugify `&`/`+` in headings differently — avoid those chars in headings (use "and").
 
 **MCP wrapper (`mcp/`):**
-- Run: `uv run --project mcp amc-mcp` (stdio MCP server)
+- Run: `uv run --project mcp amg-mcp` (stdio MCP server)
 - Test: `uv run --project mcp pytest`
 - Lint: `uv run --project mcp ruff check . && uv run --project mcp ruff format --check .`
 - Import audit: `uv run --project mcp python scripts/import_audit.py` (no platform-specific imports)
 
 **Webhook receiver (`webhook-receiver/`):**
-- Run: `uv run --project webhook-receiver uvicorn amc_receiver.app:app --host 127.0.0.1 --port 8090`
+- Run: `uv run --project webhook-receiver uvicorn amg_receiver.app:app --host 127.0.0.1 --port 8090`
 - Test: `uv run --project webhook-receiver pytest`
 - Lint: `uv run --project webhook-receiver ruff check . && uv run --project webhook-receiver ruff format --check .`
 - Bridges adapter outbound webhooks to one-shot `claude -p` invocations; see `webhook-receiver/README.md`.
 
-**`amc` operator CLI (`amc/cli/`):**
-- `amc serve {adapter|receiver}` — manual foreground run (uses `os.execvp` for flat process tree).
-- `amc install [name|all]` / `amc uninstall [name|all] [--keep-plist]` — render plists + bootstrap/bootout launchd services.
-- `amc service {start|stop|restart|enable|disable} [name|all]` — lifecycle, auto-bootstraps on `start` when needed.
-- `amc status [name|all] [--json]` / `amc logs [name|all] [--launchd] [--no-follow] [-n N]` / `amc doctor [--json]` — observe.
-- Cold-start budget: <200 ms. CLI modules MUST be import-light; defer heavy deps (FastAPI, SQLAlchemy, Rich tables, our own helper modules) to inside command bodies. `amc.cli.app` does NOT preload `amc.cli.{logs,serve,plist,output,launchctl,status,install,uninstall,service,doctor}` at module level.
+**`amg` operator CLI (`amg/cli/`):**
+- `amg serve {adapter|receiver}` — manual foreground run (uses `os.execvp` for flat process tree).
+- `amg install [name|all]` / `amg uninstall [name|all] [--keep-plist]` — render plists + bootstrap/bootout launchd services.
+- `amg service {start|stop|restart|enable|disable} [name|all]` — lifecycle, auto-bootstraps on `start` when needed.
+- `amg status [name|all] [--json]` / `amg logs [name|all] [--launchd] [--no-follow] [-n N]` / `amg doctor [--json]` — observe.
+- Cold-start budget: <200 ms. CLI modules MUST be import-light; defer heavy deps (FastAPI, SQLAlchemy, Rich tables, our own helper modules) to inside command bodies. `amg.cli.app` does NOT preload `amg.cli.{logs,serve,plist,output,launchctl,status,install,uninstall,service,doctor}` at module level.
 - Test home: `tests/cli/` — `typer.testing.CliRunner` + `_FakeTTY(StringIO)` helper for Rich-path tests. Do NOT pass `mix_stderr` to CliRunner (current click 8.3.3 already separates stderr).
-- Subprocess seam pattern: shell-out modules expose module-private `_run(argv)`; tests patch the attribute (e.g., `amc.cli.launchctl._run`).
+- Subprocess seam pattern: shell-out modules expose module-private `_run(argv)`; tests patch the attribute (e.g., `amg.cli.launchctl._run`).
 
 ### Critical domain knowledge baked into the codebase
 
-- **iMessage `attributedBody`** is an Apple typedstream archive (NOT NSKeyedArchiver/bplist). Magic: `\x04\x0Bstreamtyped`. Decoder lives in `amc/connectors/imessage/reader.py::decode_attributed_body`.
+- **iMessage `attributedBody`** is an Apple typedstream archive (NOT NSKeyedArchiver/bplist). Magic: `\x04\x0Bstreamtyped`. Decoder lives in `amg/connectors/imessage/reader.py::decode_attributed_body`.
 - **`message.date` in chat.db** is mach absolute time (ns since 2001-01-01 UTC).
 - **`discord.py` uses aiohttp internally** — `respx` cannot intercept it. Patch `discord.http.HTTPClient.request` (closure, not bound method).
 - **`websockets` 16.0** API lives in `websockets.asyncio.server` / `websockets.asyncio.client`.
@@ -49,26 +49,37 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **AppleScript injection-safe pattern**: feed the script body via stdin (`osascript -`); pass user-supplied chat_guid/text/attachment_path as positional argv to an `on run argv` handler.
 - **SQLite TEXT-column ordering hazard**: emit fixed-width 6-digit microseconds in ISO 8601 strings (`'.' < 'Z'`).
 - **Alembic `env.py`** calls `logging.config.fileConfig(...)` which disables existing loggers — tests must re-enable target loggers explicitly.
-- **Nested `claude -p` defers MCP tools** (webhook-receiver): Claude Code 2.1.x defaults to *MCP tool search*, so the four `mcp__amc__*` tools are deferred behind `ToolSearch` and the `amc` server shows `status: pending` at init. A headless one-shot agent intermittently gives up ("server hasn't finished connecting") and never calls the tools → no reply. Fix: `ClaudeRunner._build_env()` forces `ENABLE_TOOL_SEARCH=false` (loads tools directly + uses `WaitForMcpServers`) and scrubs inherited `CLAUDECODE`/`CLAUDE_CODE_*` session vars (they leak in when the receiver is launched from inside a Claude Code session, not under launchd).
+- **Nested `claude -p` defers MCP tools** (webhook-receiver): Claude Code 2.1.x defaults to *MCP tool search*, so the four `mcp__amg__*` tools are deferred behind `ToolSearch` and the `amg` server shows `status: pending` at init. A headless one-shot agent intermittently gives up ("server hasn't finished connecting") and never calls the tools → no reply. Fix: `ClaudeRunner._build_env()` forces `ENABLE_TOOL_SEARCH=false` (loads tools directly + uses `WaitForMcpServers`) and scrubs inherited `CLAUDECODE`/`CLAUDE_CODE_*` session vars (they leak in when the receiver is launched from inside a Claude Code session, not under launchd).
 
 ### Reusable patterns established
-- **Env-driven config**: `ENV_*` constants + typed helpers + `from_env()` classmethod + module-specific `*ConfigError`. Examples: `amc/core/{auth, logging, rate_limit, webhook, idempotency, sweepers}.py`.
+- **Env-driven config**: `ENV_*` constants + typed helpers + `from_env()` classmethod + module-specific `*ConfigError`. Examples: `amg/core/{auth, logging, rate_limit, webhook, idempotency, sweepers}.py`.
 - **Time injection**: `time_provider: Callable[[], datetime] | None` kwarg defaulting to a real clock; tests pass a `_FakeClock`. Used everywhere.
 - **Module-level config cache**: `_configured_X: T | None` set once at startup via `load_X()`, accessed via `get_X()`, `reset_X()` for tests.
 - **Test doubles** under `tests/fakes/{name}.py`; tests colocated as `tests/fakes/test_{name}.py`.
-- **MessageSink chokepoint** (`amc/core/message_sink.py`): single-transaction INSERT path that handles UPSERT senders/channels/attachments + INSERT messages + cursor advance + optional webhook enqueue. All connectors call `sink.record_inbound(envelope, source)`.
+- **MessageSink chokepoint** (`amg/core/message_sink.py`): single-transaction INSERT path that handles UPSERT senders/channels/attachments + INSERT messages + cursor advance + optional webhook enqueue. All connectors call `sink.record_inbound(envelope, source)`.
 - **Pydantic v2 RFC 3339**: implement Z suffix via `@field_serializer` doing `.isoformat().replace("+00:00", "Z")` — Pydantic doesn't canonicalize tz on validate.
 - **`enum.StrEnum`** instead of `class Foo(str, Enum)` (ruff `UP042`).
 
 ### Spec ↔ code divergences flagged
 - `VALIDATION_FAILED` (in code) vs `VALIDATION_ERROR` (spec §7.4.12).
-- DB path default: `state.db` (in code) vs `amc.db` (spec §11.2).
+- ~~DB path default `state.db` vs `amc.db`~~ — **resolved** in the AMG rebrand: `state.db` everywhere.
 
 Tracked in `internal/notes/spec-code-divergences.md`. Resolve in a future spec revision.
 
-## Project: Agent Messaging Channel (AMC)
+### Rebrand: AMC → AMG (2026-07-12)
 
-AMC is a single-Mac service that lets one AI agent send and receive messages on **iMessage** and **Discord** through a unified interface. The design priority is decoupling: the agent framework, the transport, and the platform connectors must each be replaceable without rewriting the others.
+The project was renamed from Agent Messaging **Channel** to Agent Messaging **Gateway**. Two rules survive the rename and matter for any future work:
+
+- **`channel` is a domain noun, not the brand.** The `channels` table, `channel_id`, `channel_type`, `ChannelType`, `CHANNEL_NOT_FOUND`, `ChannelDispatcher`, `allowed_guild_channels`, and `AMG_RATE_LIMIT_PER_CHANNEL_RPS` all keep the word. Never rewrite `channel` → `gateway`.
+- **"Gateway" is Discord's word in this codebase** (`FakeDiscordGateway`, `gateway_url`, `DEFAULT_GATEWAY`, `discord.gateway`). The *product* is the Gateway; no AMG code symbol may contain "gateway". The code token is `amg`.
+
+Runtime state dirs (`~/.config/messaging-agent/`, `~/Library/Application Support/messaging-agent/state.db`, `~/Library/Logs/messaging-agent/`) carry **no brand token** and were deliberately left alone, so the rename moved no operator data. Alembic revision ids are brand-free, so an AMC-era DB needs no migration.
+
+`AMC_*` env vars are **ignored, not aliased** — there is no compat shim. `amg doctor` fails on any surviving `AMC_*` key, because only `AMG_BEARER_TOKEN` fails loudly on its own and a half-migrated `.env` otherwise degrades silently (no `AMG_WEBHOOK_URL` ⇒ the agent never replies, with no error).
+
+## Project: Agent Messaging Gateway (AMG)
+
+AMG is a single-Mac service that lets one AI agent send and receive messages on **iMessage** and **Discord** through a unified interface. The design priority is decoupling: the agent framework, the transport, and the platform connectors must each be replaceable without rewriting the others.
 
 ## Architecture (from the blueprint)
 

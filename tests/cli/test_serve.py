@@ -1,12 +1,12 @@
-"""Tests for ``amc serve`` (spec §5.2).
+"""Tests for ``amg serve`` (spec §5.2).
 
 Coverage:
-* ``amc serve adapter`` execs the documented uv argv vector (Functional).
-* ``amc serve receiver`` execs the receiver argv with ``--project
+* ``amg serve adapter`` execs the documented uv argv vector (Functional).
+* ``amg serve receiver`` execs the receiver argv with ``--project
   webhook-receiver`` (Functional).
 * ``--host`` / ``--port`` overrides are reflected in the execvp argv
   (Functional).
-* ``amc serve backup`` exits 1 with a clear message and never calls
+* ``amg serve backup`` exits 1 with a clear message and never calls
   ``os.execvp`` (Edge Case).
 * ``uv`` not on PATH → ``FileNotFoundError`` from ``os.execvp`` is mapped
   to exit 2 with a clear message (Error Handling).
@@ -22,7 +22,7 @@ from typing import Any
 
 from typer.testing import CliRunner
 
-from amc.cli.app import app
+from amg.cli.app import app
 
 runner = CliRunner()
 
@@ -68,7 +68,7 @@ def test_serve_adapter_execs_default_argv(monkeypatch: Any) -> None:
         "uv",
         "run",
         "uvicorn",
-        "amc.app:app",
+        "amg.app:app",
         "--host",
         "127.0.0.1",
         "--port",
@@ -87,7 +87,7 @@ def test_serve_receiver_execs_default_argv(monkeypatch: Any) -> None:
         "--project",
         "webhook-receiver",
         "uvicorn",
-        "amc_receiver.app:app",
+        "amg_receiver.app:app",
         "--host",
         "127.0.0.1",
         "--port",
@@ -103,7 +103,7 @@ def test_serve_adapter_host_and_port_overrides(monkeypatch: Any) -> None:
         "uv",
         "run",
         "uvicorn",
-        "amc.app:app",
+        "amg.app:app",
         "--host",
         "0.0.0.0",
         "--port",
@@ -121,7 +121,7 @@ def test_serve_receiver_host_and_port_overrides(monkeypatch: Any) -> None:
         "--project",
         "webhook-receiver",
         "uvicorn",
-        "amc_receiver.app:app",
+        "amg_receiver.app:app",
         "--host",
         "0.0.0.0",
         "--port",
@@ -135,7 +135,7 @@ def test_serve_backup_exits_one_without_execvp(monkeypatch: Any) -> None:
     assert calls == [], "os.execvp must not be called for backup"
     assert result.exit_code == 1
     assert "backup runs only under launchd" in result.stderr
-    assert "amc service start backup" in result.stderr
+    assert "amg service start backup" in result.stderr
 
 
 def test_serve_uv_not_found_exits_two(monkeypatch: Any) -> None:

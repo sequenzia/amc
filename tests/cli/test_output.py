@@ -1,9 +1,9 @@
-"""Tests for ``amc.cli.output`` rendering helpers.
+"""Tests for ``amg.cli.output`` rendering helpers.
 
 Spec references:
 * §6.4 Accessibility — Rich auto-degrades to plain text off-TTY; ``--json``
   is the screen-reader / programmatic path.
-* §7.1 Architecture Overview — ``amc/cli/output.py`` is the single point
+* §7.1 Architecture Overview — ``amg/cli/output.py`` is the single point
   where format selection (Rich / plain / JSON) lives.
 
 Coverage:
@@ -23,7 +23,7 @@ import re
 
 import pytest
 
-from amc.cli.output import print_kv, print_status_line, render_table
+from amg.cli.output import print_kv, print_status_line, render_table
 
 # Matches any ANSI CSI sequence (color, style, cursor moves). Used to
 # assert plain-mode output is escape-free.

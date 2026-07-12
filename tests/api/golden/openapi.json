@@ -45,7 +45,7 @@
         "type": "string"
       },
       "Direction": {
-        "description": "Which way a message moved through AMC.",
+        "description": "Which way a message moved through AMG.",
         "enum": [
           "inbound",
           "outbound"
@@ -347,8 +347,8 @@
     }
   },
   "info": {
-    "description": "Agent Messaging Channel adapter — a single-Mac REST surface that normalizes iMessage and Discord behind one bearer-protected API. All endpoints, including this OpenAPI document and the Swagger UI, require `Authorization: Bearer <token>` per spec §6.2 and §7.4.",
-    "title": "AMC Adapter",
+    "description": "Agent Messaging Gateway adapter — a single-Mac REST surface that normalizes iMessage and Discord behind one bearer-protected API. All endpoints, including this OpenAPI document and the Swagger UI, require `Authorization: Bearer <token>` per spec §6.2 and §7.4.",
+    "title": "AMG Adapter",
     "version": "0.1.0"
   },
   "openapi": "3.1.0",
@@ -462,7 +462,7 @@
     },
     "/messages/context": {
       "get": {
-        "description": "``GET /messages/context`` — return chronologically ordered context.\n\nBearer + ``X-Agent-ID`` are enforced by the router-level ``dependencies``.\n``before`` and ``after`` are clamped at ``[0, 50]`` by Pydantic; values\noutside the range surface as the standard ``VALIDATION_FAILED`` envelope\nvia the global handler in :mod:`amc.core.errors`.",
+        "description": "``GET /messages/context`` — return chronologically ordered context.\n\nBearer + ``X-Agent-ID`` are enforced by the router-level ``dependencies``.\n``before`` and ``after`` are clamped at ``[0, 50]`` by Pydantic; values\noutside the range surface as the standard ``VALIDATION_FAILED`` envelope\nvia the global handler in :mod:`amg.core.errors`.",
         "operationId": "get_messages_context_messages_context_get",
         "parameters": [
           {

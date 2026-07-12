@@ -1,6 +1,6 @@
-# Agent Messaging Channel (AMC)
+# Agent Messaging Gateway (AMG)
 
-The Agent Messaging Channel (AMC) is a personal-scale messaging gateway that
+AMG is a personal-scale messaging gateway that
 exposes the same four-tool MCP surface (and an equivalent REST surface) over
 both iMessage and Discord, normalizing their very different I/O models behind a
 single message envelope. v1 ships as a Python+FastAPI adapter on macOS,
@@ -100,7 +100,7 @@ uv run mkdocs serve   # http://127.0.0.1:8000
 ### Deploying the docs
 
 The site is published to GitHub Pages at
-<https://sequenzia.github.io/amc/> by the
+<https://sequenzia.github.io/amg/> by the
 [`docs` workflow](.github/workflows/docs.yml). Deployment is **manual** —
 it only runs when triggered, never automatically on push:
 
@@ -113,7 +113,7 @@ workflow installs the docs toolchain (`uv sync --only-group docs`), runs the
 docs linter and `mkdocs build --strict`, then publishes the built `site/` via
 `actions/deploy-pages` (artifact deployment — there is no `gh-pages` branch).
 Before the first run, set the repo's Pages source to **GitHub Actions**
-(Settings → Pages), or once via `gh api -X POST repos/sequenzia/amc/pages -f build_type=workflow`.
+(Settings → Pages), or once via `gh api -X POST repos/sequenzia/amg/pages -f build_type=workflow`.
 
 Before triggering a deploy, validate locally with the same checks CI runs:
 
@@ -132,9 +132,9 @@ Key entry points:
 - [Runbook](docs/operations/runbook.md) — common failures and recoveries
   (permission revoked, gateway disconnect, AppleScript failing, webhook outage,
   Mac asleep).
-- [Spec](specs/agent-messaging-channel-SPEC.md) — full technical specification
+- [Spec](specs/agent-messaging-gateway-SPEC.md) — full technical specification
   (requirements, architecture, data models, API contracts, test plan).
-- [Blueprint](internal/blueprints/agent-messaging-channel.md) — original
+- [Blueprint](internal/blueprints/agent-messaging-gateway.md) — original
   architectural blueprint; the spec extends and, in two specific places,
   supersedes it.
 
@@ -142,7 +142,7 @@ Key entry points:
 
 ### Adapter (Python)
 
-The Python adapter under `amc/` is the source of truth: it owns the SQLite
+The Python adapter under `amg/` is the source of truth: it owns the SQLite
 store, runs the iMessage and Discord connectors as background tasks, and
 exposes the REST surface plus the outbound webhook described in spec §5 / §7.4.
 
@@ -160,55 +160,55 @@ uv sync --all-packages                     # installs adapter + wrapper
 uv run --project mcp pytest                # full wrapper test suite
 uv run --project mcp ruff check .          # lint
 uv run --project mcp python scripts/import_audit.py
-uv run --project mcp amc-mcp               # launches the stdio MCP server
+uv run --project mcp amg-mcp               # launches the stdio MCP server
 ```
 
 The wrapper has zero platform-specific imports (no Discord SDK, no
 AppleScript / chat.db references); the import-audit script asserts this
 statically.
 
-## amc CLI
+## amg CLI
 
-`amc` is the operator-facing CLI shipped with the adapter. It wraps the
+`amg` is the operator-facing CLI shipped with the adapter. It wraps the
 foreground entry points, the `launchd` plist render/install pipeline, and a
 preflight diagnostics command — everything an operator needs to install,
-inspect, and troubleshoot the AMC services on a single Mac. After
-`uv sync --all-packages`, the `amc` entry point is on the path; run
-`amc --help` for the canonical surface.
+inspect, and troubleshoot the AMG services on a single Mac. After
+`uv sync --all-packages`, the `amg` entry point is on the path; run
+`amg --help` for the canonical surface.
 
 ### Command reference
 
 | Command | Description | Example |
 | --- | --- | --- |
-| `amc serve {adapter\|receiver}` | Run an AMC service in the foreground (`os.execvp`-handoff to `uv run uvicorn ...`). The `backup` target is launchd-only. | `amc serve adapter` |
-| `amc install [name\|all]` | Render plists and bootstrap AMC launchd services. No args = install all (`adapter`, `receiver`, `backup`). | `amc install adapter receiver` |
-| `amc uninstall [name\|all] [--keep-plist]` | Bootout services and remove their plists. `--keep-plist` leaves the file on disk. | `amc uninstall all --keep-plist` |
-| `amc service {start\|stop\|restart\|enable\|disable} [name\|all]` | Per-service launchd lifecycle. `start` auto-bootstraps if needed; `restart` uses `kickstart -k`. | `amc service restart adapter` |
-| `amc status [name\|all] [--json]` | Show launchd state (PID, last exit, uptime) as a Rich/plain table, or JSON for tooling. | `amc status --json` |
-| `amc logs [name\|all] [--launchd] [--no-follow] [-n N]` | Tail-follow service logs. `--launchd` switches to launchd-level stdout/stderr. Multi-service mode prefixes each line with `[<svc>] `. | `amc logs adapter -n 100` |
-| `amc doctor [--json]` | Run preflight diagnostics (spec §5.8). Exits 2 if any check is `fail`. | `amc doctor` |
+| `amg serve {adapter\|receiver}` | Run an AMG service in the foreground (`os.execvp`-handoff to `uv run uvicorn ...`). The `backup` target is launchd-only. | `amg serve adapter` |
+| `amg install [name\|all]` | Render plists and bootstrap AMG launchd services. No args = install all (`adapter`, `receiver`, `backup`). | `amg install adapter receiver` |
+| `amg uninstall [name\|all] [--keep-plist]` | Bootout services and remove their plists. `--keep-plist` leaves the file on disk. | `amg uninstall all --keep-plist` |
+| `amg service {start\|stop\|restart\|enable\|disable} [name\|all]` | Per-service launchd lifecycle. `start` auto-bootstraps if needed; `restart` uses `kickstart -k`. | `amg service restart adapter` |
+| `amg status [name\|all] [--json]` | Show launchd state (PID, last exit, uptime) as a Rich/plain table, or JSON for tooling. | `amg status --json` |
+| `amg logs [name\|all] [--launchd] [--no-follow] [-n N]` | Tail-follow service logs. `--launchd` switches to launchd-level stdout/stderr. Multi-service mode prefixes each line with `[<svc>] `. | `amg logs adapter -n 100` |
+| `amg doctor [--json]` | Run preflight diagnostics (spec §5.8). Exits 2 if any check is `fail`. | `amg doctor` |
 
 Service names are `adapter`, `receiver`, `backup`, or `all`. An empty target
 list is equivalent to `all`.
 
 ### Shell completion
 
-The `amc` CLI uses Typer's built-in completion. To enable tab-completion for
-commands like `amc <TAB>` and `amc service <TAB>`:
+The `amg` CLI uses Typer's built-in completion. To enable tab-completion for
+commands like `amg <TAB>` and `amg service <TAB>`:
 
 ```bash
 # zsh (default on macOS)
-amc --install-completion zsh
+amg --install-completion zsh
 exec zsh   # or open a new terminal
 
 # bash
-amc --install-completion bash
+amg --install-completion bash
 
 # fish
-amc --install-completion fish
+amg --install-completion fish
 ```
 
-To inspect the script without installing it, use `amc --show-completion`.
+To inspect the script without installing it, use `amg --show-completion`.
 Typer auto-detects the current shell via `shellingham`; in non-TTY contexts it
 prints `Shell not supported.` and exits non-zero.
 

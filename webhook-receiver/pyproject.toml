@@ -1,7 +1,7 @@
 [project]
-name = "amc-receiver"
+name = "amg-receiver"
 version = "0.1.0"
-description = "Webhook receiver that turns AMC inbound messages into one-shot `claude -p` invocations."
+description = "Webhook receiver that turns AMG inbound messages into one-shot `claude -p` invocations."
 authors = [
     { name = "Stephen Sequenzia", email = "sequenzia@gmail.com" }
 ]
@@ -13,7 +13,7 @@ dependencies = [
 ]
 
 [project.scripts]
-amc-webhook-receiver = "amc_receiver.__main__:main"
+amg-webhook-receiver = "amg_receiver.__main__:main"
 
 [dependency-groups]
 dev = [

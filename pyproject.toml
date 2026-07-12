@@ -1,7 +1,7 @@
 [project]
-name = "amc"
+name = "amg"
 version = "0.1.0"
-description = "Agent Messaging Channel — unified iMessage/Discord adapter for a single AI agent."
+description = "Agent Messaging Gateway — unified iMessage/Discord adapter for a single AI agent."
 authors = [
     { name = "Stephen Sequenzia", email = "sequenzia@gmail.com" }
 ]
@@ -23,7 +23,7 @@ dependencies = [
 ]
 
 [project.scripts]
-amc = "amc.cli.app:app"
+amg = "amg.cli.app:app"
 
 [dependency-groups]
 dev = [

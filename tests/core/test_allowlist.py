@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.allowlist`` (spec §5.7 / §7.3.3 identity_links).
+"""Tests for ``amg.core.allowlist`` (spec §5.7 / §7.3.3 identity_links).
 
 Coverage:
 
@@ -44,7 +44,7 @@ from alembic import command
 from alembic.config import Config
 from sqlalchemy import select
 
-from amc.core.allowlist import (
+from amg.core.allowlist import (
     ENV_ALLOWLIST_PATH,
     AllowlistEntry,
     AllowlistError,
@@ -56,9 +56,9 @@ from amc.core.allowlist import (
     reset_allowlist,
     setup_sighup_reload,
 )
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.envelope import Source
-from amc.core.schema import identity_links, senders
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.envelope import Source
+from amg.core.schema import identity_links, senders
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -73,7 +73,7 @@ ALEMBIC_INI = REPO_ROOT / "alembic.ini"
 def fresh_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Path]:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     db_path = tmp_path / "allowlist.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(db_path))
+    monkeypatch.setenv("AMG_DB_PATH", str(db_path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     yield db_path
@@ -380,10 +380,10 @@ def test_load_allowlist_falls_back_to_default(
     """When neither argument nor env is set, the default path is used."""
     monkeypatch.delenv(ENV_ALLOWLIST_PATH, raising=False)
     # Point the module-level default at a guaranteed-missing path so the
-    # test is hermetic on dev machines that already have AMC configured
+    # test is hermetic on dev machines that already have AMG configured
     # (where ~/.config/messaging-agent/allowlist.toml may exist).
     missing = tmp_path / "no-such-allowlist.toml"
-    monkeypatch.setattr("amc.core.allowlist.DEFAULT_ALLOWLIST_PATH", missing)
+    monkeypatch.setattr("amg.core.allowlist.DEFAULT_ALLOWLIST_PATH", missing)
     with pytest.raises(AllowlistError) as excinfo:
         load_allowlist()
     assert str(missing) in str(excinfo.value)

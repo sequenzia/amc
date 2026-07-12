@@ -13,8 +13,8 @@ We drive Alembic through its programmatic API
 (:func:`alembic.command.upgrade` / :func:`alembic.command.downgrade`) and
 inject the per-test SQLite URL via ``Config(cmd_opts=Namespace(x=[...]))``,
 which mirrors the CLI ``alembic -x url=sqlite:///... upgrade head`` form
-that ``amc/migrations/env.py`` already supports. This avoids leaning on the
-``$AMC_DB_PATH`` env var so the tests are independent of the surrounding
+that ``amg/migrations/env.py`` already supports. This avoids leaning on the
+``$AMG_DB_PATH`` env var so the tests are independent of the surrounding
 process environment.
 """
 

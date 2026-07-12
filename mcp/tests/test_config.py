@@ -1,10 +1,10 @@
-"""Unit tests for ``amc_mcp.config`` (mirrors mcp-wrapper's config.test.ts)."""
+"""Unit tests for ``amg_mcp.config`` (mirrors mcp-wrapper's config.test.ts)."""
 
 from __future__ import annotations
 
 import pytest
 
-from amc_mcp.config import (
+from amg_mcp.config import (
     DEFAULT_BASE_URL,
     ENV_AGENT_ID,
     ENV_BASE_URL,
@@ -27,7 +27,7 @@ class TestLoadConfig:
         cfg = load_config({ENV_BEARER_TOKEN: "t", ENV_AGENT_ID: "a"})
         assert cfg.base_url == "http://127.0.0.1:8080"
 
-    def test_honors_amc_base_url_when_set(self) -> None:
+    def test_honors_amg_base_url_when_set(self) -> None:
         cfg = load_config(
             {
                 ENV_BASE_URL: "http://localhost:9999",
@@ -50,26 +50,26 @@ class TestLoadConfig:
         assert cfg.agent_id == "agent"
 
     def test_missing_bearer_token(self) -> None:
-        with pytest.raises(WrapperConfigError, match="AMC_BEARER_TOKEN"):
+        with pytest.raises(WrapperConfigError, match="AMG_BEARER_TOKEN"):
             load_config({ENV_AGENT_ID: "a"})
 
     def test_missing_agent_id(self) -> None:
-        with pytest.raises(WrapperConfigError, match="AMC_AGENT_ID"):
+        with pytest.raises(WrapperConfigError, match="AMG_AGENT_ID"):
             load_config({ENV_BEARER_TOKEN: "t"})
 
     def test_lists_every_missing_var_in_one_message(self) -> None:
         with pytest.raises(WrapperConfigError) as excinfo:
             load_config({})
         msg = str(excinfo.value)
-        assert "AMC_BEARER_TOKEN" in msg
-        assert "AMC_AGENT_ID" in msg
+        assert "AMG_BEARER_TOKEN" in msg
+        assert "AMG_AGENT_ID" in msg
 
     def test_treats_whitespace_only_values_as_missing(self) -> None:
-        with pytest.raises(WrapperConfigError, match="AMC_BEARER_TOKEN"):
+        with pytest.raises(WrapperConfigError, match="AMG_BEARER_TOKEN"):
             load_config({ENV_BEARER_TOKEN: "   ", ENV_AGENT_ID: "a"})
 
     def test_rejects_invalid_base_url(self) -> None:
-        with pytest.raises(WrapperConfigError, match="AMC_BASE_URL"):
+        with pytest.raises(WrapperConfigError, match="AMG_BASE_URL"):
             load_config(
                 {
                     ENV_BASE_URL: "not a url",

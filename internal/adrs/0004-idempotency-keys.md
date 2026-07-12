@@ -44,7 +44,7 @@ The standard solution is the `Idempotency-Key` header pattern — a client-suppl
 ### Negative
 
 - **One extra DB write per send.** Acceptable; sends are not the hot path.
-- **Sweeper required.** Either a periodic cleanup task or a "delete on read if expired" policy. v1 ships a periodic sweeper; the time-injection pattern from `amc/core/rate_limit.py` is reused so the sweeper is testable without `time.sleep`.
+- **Sweeper required.** Either a periodic cleanup task or a "delete on read if expired" policy. v1 ships a periodic sweeper; the time-injection pattern from `amg/core/rate_limit.py` is reused so the sweeper is testable without `time.sleep`.
 - **Replay returns the original `sent_at`.** A client that uses `sent_at` to measure latency from its own send-call may be surprised by a "stale" timestamp on a replay. Documented in the spec §7.4.6 example.
 - **Expired-then-re-sent edge case.** A client that retries 24 h + ε after the original send will perform a second platform send. Considered acceptable: 24 h is far longer than any reasonable retry budget, and the alternative (longer cache, unbounded growth) is worse.
 
@@ -63,7 +63,7 @@ The standard solution is the `Idempotency-Key` header pattern — a client-suppl
 ## References
 
 - Blueprint §5.1 — `POST /messages/send` endpoint
-- Spec §5.2 / REQ-AMC-002 — Outbound message sending feature
+- Spec §5.2 / REQ-AMG-002 — Outbound message sending feature
 - Spec §7.3.3 — `idempotency_keys` table definition
 - Spec §7.4.6 — `POST /messages/send` endpoint contract (Idempotency-Key, replay header, 422 code)
 - Spec §14 OQ-5 — Idempotency-Key collision question (this ADR resolves it)

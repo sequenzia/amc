@@ -28,7 +28,6 @@ from tests.fixtures.build_chat_db import (
     ALLOWLISTED_HANDLE,
     ATTACHMENT_FILENAME,
     ATTACHMENTS_DIR,
-    CHAT_DB_PATH,
     CHAT_GUID,
     MSG_GUID_1,
     MSG_GUID_2,
@@ -130,9 +129,12 @@ def test_attachment_row_links_to_real_file(ro_conn: sqlite3.Connection) -> None:
     assert row is not None
     assert row["mime_type"] == "image/png"
     assert row["uti"] == "public.png"
-    on_disk = Path(row["filename"])
+    # ``attachment.filename`` holds the absolute path of whichever checkout
+    # built the committed fixture, so it is resolved by basename against this
+    # checkout's ATTACHMENTS_DIR rather than trusted verbatim.
+    assert Path(row["filename"]).name == ATTACHMENT_FILENAME
+    on_disk = ATTACHMENTS_DIR / ATTACHMENT_FILENAME
     assert on_disk.exists(), f"attachment file missing: {on_disk}"
-    assert on_disk.name == ATTACHMENT_FILENAME
     assert on_disk.stat().st_size == row["total_bytes"]
 
 
@@ -216,26 +218,26 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def test_build_is_deterministic(tmp_path: Path) -> None:
+def test_build_is_deterministic(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Two consecutive builds produce a byte-identical chat.db.
 
-    We snapshot the existing fixture, force a rebuild, snapshot again, then
-    restore the original so other tests keep their session-scoped DB.
+    The builds are redirected into ``tmp_path``. ``tests/fixtures/chat.db`` is
+    a *tracked* binary, and ``build()`` bakes the absolute path of
+    ``ATTACHMENTS_DIR`` into ``attachment.filename`` — rebuilding it in place
+    would rewrite a committed file with a machine-specific path.
     """
-    ensure_chat_db()
-    original_bytes = CHAT_DB_PATH.read_bytes()
+    scratch_db = tmp_path / "chat.db"
+    monkeypatch.setattr(build_chat_db, "CHAT_DB_PATH", scratch_db)
+
+    build(force=True)
     snapshot1 = tmp_path / "snap1.db"
-    snapshot1.write_bytes(original_bytes)
+    snapshot1.write_bytes(scratch_db.read_bytes())
 
     build(force=True)
     snapshot2 = tmp_path / "snap2.db"
-    snapshot2.write_bytes(CHAT_DB_PATH.read_bytes())
+    snapshot2.write_bytes(scratch_db.read_bytes())
 
-    build(force=True)
-    snapshot3 = tmp_path / "snap3.db"
-    snapshot3.write_bytes(CHAT_DB_PATH.read_bytes())
-
-    assert _sha256(snapshot2) == _sha256(snapshot3), (
+    assert _sha256(snapshot1) == _sha256(snapshot2), (
         "two consecutive rebuilds produced different chat.db bytes"
     )
 

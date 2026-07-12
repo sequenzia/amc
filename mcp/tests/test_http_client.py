@@ -1,4 +1,4 @@
-"""Unit tests for ``amc_mcp.http_client`` (mirrors http.test.ts)."""
+"""Unit tests for ``amg_mcp.http_client`` (mirrors http.test.ts)."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import re
 import httpx
 import pytest
 
-from amc_mcp.config import WrapperConfig
-from amc_mcp.http_client import (
+from amg_mcp.config import WrapperConfig
+from amg_mcp.http_client import (
     NETWORK_ERROR_STATUS,
     HttpErr,
     HttpOk,

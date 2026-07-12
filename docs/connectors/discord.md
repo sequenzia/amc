@@ -1,11 +1,11 @@
 # Discord Connector
 
-The Discord connector bridges Discord and AMC in both directions. It lives at `amc/connectors/discord/connector.py` and is a subclass of `discord.Client` — it relies on the [`discord.py`](https://github.com/Rapptz/discord.py) library for the Gateway WebSocket protocol and the Discord REST API.
+The Discord connector bridges Discord and AMG in both directions. It lives at `amg/connectors/discord/connector.py` and is a subclass of `discord.Client` — it relies on the [`discord.py`](https://github.com/Rapptz/discord.py) library for the Gateway WebSocket protocol and the Discord REST API.
 
 - **Inbound** is push: Discord delivers `MESSAGE_CREATE` events over a persistent Gateway WebSocket, and the connector's `on_message` handler turns each one into a normalized [message envelope](../architecture/message-envelope.md).
 - **Outbound** is pull: `DiscordConnector.send(...)` resolves the target channel and posts the message over the Discord REST API.
 
-The connector requires a **bot token**, supplied via `AMC_DISCORD_BOT_TOKEN`. It only starts when that variable is set — see [Configuration](../reference/configuration.md). On a Discord-only deployment this is the only connector that runs; on a host with no token configured the source simply reports `disabled` in `/healthz`.
+The connector requires a **bot token**, supplied via `AMG_DISCORD_BOT_TOKEN`. It only starts when that variable is set — see [Configuration](../reference/configuration.md). On a Discord-only deployment this is the only connector that runs; on a host with no token configured the source simply reports `disabled` in `/healthz`.
 
 ```mermaid
 flowchart LR
@@ -106,9 +106,9 @@ The connector translates each `discord.Message` into the [normalized message env
 3. **Build a reply reference** when `reply_to` is set — a `discord.MessageReference` with `fail_if_not_exists=False`, so replying to a since-deleted message doesn't fail the send.
 4. **Send** — `channel.send(text, reference=..., file(s)=...)`.
 
-On success the call returns `SendResult(ok=True, message_id=str(sent.id))`. Failures are mapped to AMC error codes:
+On success the call returns `SendResult(ok=True, message_id=str(sent.id))`. Failures are mapped to AMG error codes:
 
-| Discord exception | AMC error code |
+| Discord exception | AMG error code |
 |---|---|
 | `discord.Forbidden` (401 / 403) | `PLATFORM_AUTH` (also flips `degraded = True`) |
 | any other `discord.HTTPException` | `PLATFORM_SEND_FAILED` |

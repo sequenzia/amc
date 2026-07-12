@@ -1,11 +1,11 @@
-"""Assert ``amc_mcp.version`` matches ``pyproject.toml``."""
+"""Assert ``amg_mcp.version`` matches ``pyproject.toml``."""
 
 from __future__ import annotations
 
 import tomllib
 from pathlib import Path
 
-from amc_mcp.version import SERVER_NAME, SERVER_VERSION
+from amg_mcp.version import SERVER_NAME, SERVER_VERSION
 
 
 def _project_meta() -> dict:

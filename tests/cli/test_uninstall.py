@@ -1,10 +1,10 @@
-"""Tests for ``amc uninstall`` (spec §5.4).
+"""Tests for ``amg uninstall`` (spec §5.4).
 
 Coverage matrix:
 
 Functional (spec §5.4 AC):
-* ``amc uninstall`` (no args) removes all three services and their plists.
-* ``amc uninstall adapter`` removes only the adapter.
+* ``amg uninstall`` (no args) removes all three services and their plists.
+* ``amg uninstall adapter`` removes only the adapter.
 * ``--keep-plist`` boots out the service but leaves the plist on disk.
 * Already-unloaded service (launchctl exit 3 or 113) succeeds — no error.
 * Exit 0 on success.
@@ -19,13 +19,13 @@ Error Handling (spec §5.4):
   the per-service status line detail.
 
 Strategy:
-* Patch ``amc.cli.launchctl._run`` to inject canned subprocess results.
+* Patch ``amg.cli.launchctl._run`` to inject canned subprocess results.
   This is the lowest-level seam in the launchctl module and lets us
   control returncode/stderr per call.
 * Use ``tmp_path`` as a fake ``~/Library/LaunchAgents`` directory and
   pass it through via the ``launch_agents_dir`` kwarg of the run
   functions. The CLI command itself reads
-  ``amc.cli.uninstall.LAUNCH_AGENTS_DIR`` — we monkeypatch that constant
+  ``amg.cli.uninstall.LAUNCH_AGENTS_DIR`` — we monkeypatch that constant
   for the CliRunner tests.
 * ``CliRunner`` exercises the full Typer surface; direct calls to
   :func:`uninstall_one` / :func:`run_uninstall` exercise the unit-level
@@ -43,9 +43,9 @@ from typing import Any
 import pytest
 from typer.testing import CliRunner
 
-from amc.cli import launchctl, uninstall
-from amc.cli.app import app
-from amc.cli.services import REGISTRY
+from amg.cli import launchctl, uninstall
+from amg.cli.app import app
+from amg.cli.services import REGISTRY
 
 runner = CliRunner()
 
@@ -116,7 +116,7 @@ def test_uninstall_default_removes_all_services_and_plists(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """``amc uninstall`` (no args) calls bootout for each label and deletes the plist."""
+    """``amg uninstall`` (no args) calls bootout for each label and deletes the plist."""
     monkeypatch.setattr(uninstall, "LAUNCH_AGENTS_DIR", tmp_path)
     _seed_plists(tmp_path)
 
@@ -145,7 +145,7 @@ def test_uninstall_single_target_only_touches_that_service(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
 ) -> None:
-    """``amc uninstall adapter`` boots out only adapter; receiver/backup untouched."""
+    """``amg uninstall adapter`` boots out only adapter; receiver/backup untouched."""
     monkeypatch.setattr(uninstall, "LAUNCH_AGENTS_DIR", tmp_path)
     _seed_plists(tmp_path)
 
@@ -156,11 +156,11 @@ def test_uninstall_single_target_only_touches_that_service(
 
     assert result.exit_code == 0, result.output + result.stderr
     assert len(captured) == 1
-    assert captured[0][-1].endswith("/com.user.amc-adapter")
+    assert captured[0][-1].endswith("/com.user.amg-adapter")
     # Adapter plist gone, others remain.
-    assert not (tmp_path / "com.user.amc-adapter.plist").exists()
-    assert (tmp_path / "com.user.amc-webhook-receiver.plist").exists()
-    assert (tmp_path / "com.user.amc-backup.plist").exists()
+    assert not (tmp_path / "com.user.amg-adapter.plist").exists()
+    assert (tmp_path / "com.user.amg-webhook-receiver.plist").exists()
+    assert (tmp_path / "com.user.amg-backup.plist").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -186,7 +186,7 @@ def test_keep_plist_flag_preserves_file(
     assert len(captured) == 1
     assert captured[0][:2] == ["launchctl", "bootout"]
     # Plist remains.
-    assert (tmp_path / "com.user.amc-adapter.plist").exists()
+    assert (tmp_path / "com.user.amg-adapter.plist").exists()
     assert "plist preserved" in result.stdout
 
 
@@ -203,7 +203,7 @@ def test_already_unloaded_is_success(
 ) -> None:
     """launchctl exit 3 or 113 ("not bootstrapped") is treated as no-op success."""
     monkeypatch.setattr(uninstall, "LAUNCH_AGENTS_DIR", tmp_path)
-    _seed_plists(tmp_path, include={"com.user.amc-adapter"})
+    _seed_plists(tmp_path, include={"com.user.amg-adapter"})
 
     monkeypatch.setattr(
         launchctl,
@@ -219,7 +219,7 @@ def test_already_unloaded_is_success(
     assert result.exit_code == 0, result.output + result.stderr
     assert "already unloaded" in result.stdout
     # Plist still gets removed even on no-op bootout.
-    assert not (tmp_path / "com.user.amc-adapter.plist").exists()
+    assert not (tmp_path / "com.user.amg-adapter.plist").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -264,7 +264,7 @@ def test_aggregate_exit_code_is_max_across_targets(
         launchctl,
         "_run",
         _fake_run_factory(
-            returncode_by_label={"com.user.amc-webhook-receiver": 1},
+            returncode_by_label={"com.user.amg-webhook-receiver": 1},
             stderr="boom",
             captured=captured,
         ),
@@ -277,9 +277,9 @@ def test_aggregate_exit_code_is_max_across_targets(
     assert len(captured) == 3
     # Adapter and backup plists were removed; receiver plist remains because
     # bootout failed for it (we don't remove on failure path).
-    assert not (tmp_path / "com.user.amc-adapter.plist").exists()
-    assert (tmp_path / "com.user.amc-webhook-receiver.plist").exists()
-    assert not (tmp_path / "com.user.amc-backup.plist").exists()
+    assert not (tmp_path / "com.user.amg-adapter.plist").exists()
+    assert (tmp_path / "com.user.amg-webhook-receiver.plist").exists()
+    assert not (tmp_path / "com.user.amg-backup.plist").exists()
     # The failure detail is present in the per-service status line.
     assert "receiver" in result.stdout
     assert "bootout failed" in result.stdout
@@ -296,7 +296,7 @@ def test_unexpected_launchctl_failure_exits_two_with_stderr(
 ) -> None:
     """Single-target unexpected failure (exit 1) → exit 2 and stderr surfaced."""
     monkeypatch.setattr(uninstall, "LAUNCH_AGENTS_DIR", tmp_path)
-    _seed_plists(tmp_path, include={"com.user.amc-adapter"})
+    _seed_plists(tmp_path, include={"com.user.amg-adapter"})
 
     monkeypatch.setattr(
         launchctl,
@@ -313,7 +313,7 @@ def test_unexpected_launchctl_failure_exits_two_with_stderr(
     assert "bootout failed" in result.stdout
     assert "permission denied" in result.stdout
     # Plist must NOT be removed on bootout failure.
-    assert (tmp_path / "com.user.amc-adapter.plist").exists()
+    assert (tmp_path / "com.user.amg-adapter.plist").exists()
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ def test_run_uninstall_returns_max_across_targets(
         launchctl,
         "_run",
         _fake_run_factory(
-            returncode_by_label={"com.user.amc-adapter": 1},
+            returncode_by_label={"com.user.amg-adapter": 1},
             stderr="boom",
         ),
     )
@@ -368,7 +368,7 @@ def test_uninstall_one_keep_plist_skips_unlink(
     tmp_path: Path,
 ) -> None:
     """Direct ``uninstall_one`` call with ``keep_plist=True`` leaves plist alone."""
-    _seed_plists(tmp_path, include={"com.user.amc-adapter"})
+    _seed_plists(tmp_path, include={"com.user.amg-adapter"})
     monkeypatch.setattr(launchctl, "_run", _fake_run_factory())
 
     adapter = next(s for s in REGISTRY if s.name == "adapter")
@@ -390,7 +390,7 @@ def test_uninstall_one_already_unloaded_returns_zero(
     tmp_path: Path,
 ) -> None:
     """Direct ``uninstall_one`` with launchctl exit 113 returns 0."""
-    _seed_plists(tmp_path, include={"com.user.amc-adapter"})
+    _seed_plists(tmp_path, include={"com.user.amg-adapter"})
     monkeypatch.setattr(
         launchctl,
         "_run",

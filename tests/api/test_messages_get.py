@@ -45,14 +45,14 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.api.messages_get import (
+from amg.api.messages_get import (
     configure_session_factory,
     reset_session_factory,
     router,
 )
-from amc.core.auth import configure_bearer_token, reset_bearer_token
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.errors import register_exception_handlers
+from amg.core.auth import configure_bearer_token, reset_bearer_token
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.errors import register_exception_handlers
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ALEMBIC_INI = REPO_ROOT / "alembic.ini"
@@ -83,7 +83,7 @@ SENDER_AGENT = "agent"
 def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
     path = tmp_path / "messages_get.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(path))
+    monkeypatch.setenv("AMG_DB_PATH", str(path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     return path
@@ -371,8 +371,8 @@ class TestOutbound:
 def _error_code(body: dict) -> str:
     """Extract the canonical error code from either envelope shape.
 
-    The route-side ``AMCError`` handler emits ``{"error": {"code": ...}}``
-    directly. The auth dependencies (``amc.core.auth``) still raise stock
+    The route-side ``AMGError`` handler emits ``{"error": {"code": ...}}``
+    directly. The auth dependencies (``amg.core.auth``) still raise stock
     ``HTTPException(detail=...)`` which FastAPI nests under ``"detail"`` — task
     #27/#35 will flatten it. Tolerate both shapes so this test file does not
     break when that flattening lands.

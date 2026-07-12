@@ -1,4 +1,4 @@
-"""Tests for ``amc.core.idempotency`` (spec §5.2 / §7.3.3 / §7.4.5).
+"""Tests for ``amg.core.idempotency`` (spec §5.2 / §7.3.3 / §7.4.5).
 
 Coverage:
 
@@ -27,9 +27,9 @@ from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from amc.core.db import create_engine_from_env, create_session_factory
-from amc.core.errors import register_exception_handlers
-from amc.core.idempotency import (
+from amg.core.db import create_engine_from_env, create_session_factory
+from amg.core.errors import register_exception_handlers
+from amg.core.idempotency import (
     DEFAULT_TTL,
     REPLAY_HEADER,
     IdempotencyContext,
@@ -76,7 +76,7 @@ def db_path(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     """Apply ``alembic upgrade head`` to a fresh tmp_path SQLite file."""
 
     path = tmp_path / "idem.db"
-    monkeypatch.setenv("AMC_DB_PATH", str(path))
+    monkeypatch.setenv("AMG_DB_PATH", str(path))
     cfg = Config(str(ALEMBIC_INI))
     command.upgrade(cfg, "head")
     return path

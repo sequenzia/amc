@@ -10,7 +10,7 @@ SQLite database. We assert:
 - A second invocation overwrites the same-day backup (idempotency).
 - Files older than the 7-day retention window are deleted; files inside the
   window are preserved.
-- Files that do NOT match the `amc-YYYY-MM-DD.db` naming pattern are left
+- Files that do NOT match the `amg-YYYY-MM-DD.db` naming pattern are left
   untouched.
 - A missing source DB causes the script to log ERROR and exit non-zero.
 - A backup-dir create failure (target path exists as a regular file) is
@@ -60,10 +60,10 @@ def _run_backup(
 ) -> subprocess.CompletedProcess[str]:
     """Invoke ops/scripts/backup.sh with the given environment."""
     env = os.environ.copy()
-    env["AMC_DB_PATH"] = str(db_path)
-    env["AMC_LOG_DIR"] = str(log_dir)
+    env["AMG_DB_PATH"] = str(db_path)
+    env["AMG_LOG_DIR"] = str(log_dir)
     if backup_dir is not None:
-        env["AMC_BACKUP_DIR"] = str(backup_dir)
+        env["AMG_BACKUP_DIR"] = str(backup_dir)
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
@@ -100,7 +100,7 @@ def test_sqlite3_cli_available() -> None:
 
 
 def test_produces_date_stamped_backup(tmp_path: Path) -> None:
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
     log_dir = tmp_path / "logs"
     backup_dir = tmp_path / "backups"
@@ -111,7 +111,7 @@ def test_produces_date_stamped_backup(tmp_path: Path) -> None:
         f"backup.sh exited {result.returncode}\nstdout:{result.stdout}\nstderr:{result.stderr}"
     )
 
-    target = backup_dir / f"amc-{_today_stamp()}.db"
+    target = backup_dir / f"amg-{_today_stamp()}.db"
     assert target.is_file(), f"expected backup at {target}; backup_dir={list(backup_dir.iterdir())}"
     assert target.stat().st_size > 0, "backup file is empty"
 
@@ -128,7 +128,7 @@ def test_backup_is_internally_consistent_and_has_source_rows(tmp_path: Path) -> 
     We verify by running `PRAGMA integrity_check` and checking the row data
     survives the round-trip.
     """
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
     log_dir = tmp_path / "logs"
     backup_dir = tmp_path / "backups"
@@ -136,7 +136,7 @@ def test_backup_is_internally_consistent_and_has_source_rows(tmp_path: Path) -> 
     result = _run_backup(db_path=db_path, log_dir=log_dir, backup_dir=backup_dir)
     assert result.returncode == 0, result.stderr
 
-    target = backup_dir / f"amc-{_today_stamp()}.db"
+    target = backup_dir / f"amg-{_today_stamp()}.db"
     assert target.is_file()
 
     conn = sqlite3.connect(str(target))
@@ -155,7 +155,7 @@ def test_wal_mode_source_produces_consistent_backup(tmp_path: Path) -> None:
     in the WAL (un-checkpointed). The Online Backup API must still produce a
     consistent snapshot containing the WAL-resident write.
     """
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
 
     conn = sqlite3.connect(str(db_path))
@@ -170,7 +170,7 @@ def test_wal_mode_source_produces_consistent_backup(tmp_path: Path) -> None:
         result = _run_backup(db_path=db_path, log_dir=log_dir, backup_dir=backup_dir)
         assert result.returncode == 0, result.stderr
 
-        target = backup_dir / f"amc-{_today_stamp()}.db"
+        target = backup_dir / f"amg-{_today_stamp()}.db"
         assert target.is_file()
 
         # Open backup in a fresh connection and confirm the WAL-resident row
@@ -193,14 +193,14 @@ def test_wal_mode_source_produces_consistent_backup(tmp_path: Path) -> None:
 
 
 def test_idempotent_same_day_overwrites(tmp_path: Path) -> None:
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
     log_dir = tmp_path / "logs"
     backup_dir = tmp_path / "backups"
 
     r1 = _run_backup(db_path=db_path, log_dir=log_dir, backup_dir=backup_dir)
     assert r1.returncode == 0, r1.stderr
-    target = backup_dir / f"amc-{_today_stamp()}.db"
+    target = backup_dir / f"amg-{_today_stamp()}.db"
     assert target.is_file()
 
     # Confirm initial contents (no row 99 yet).
@@ -229,7 +229,7 @@ def test_idempotent_same_day_overwrites(tmp_path: Path) -> None:
     assert r2.returncode == 0, r2.stderr
 
     # Same path; should still be a single file in backup_dir.
-    backups_today = list(backup_dir.glob(f"amc-{_today_stamp()}.db"))
+    backups_today = list(backup_dir.glob(f"amg-{_today_stamp()}.db"))
     assert len(backups_today) == 1, f"expected exactly one same-day backup, got {backups_today}"
 
     # The same-day backup file must reflect the post-mutation source, proving
@@ -248,7 +248,7 @@ def test_idempotent_same_day_overwrites(tmp_path: Path) -> None:
 
 
 def test_retention_deletes_files_older_than_7_days(tmp_path: Path) -> None:
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
     log_dir = tmp_path / "logs"
     backup_dir = tmp_path / "backups"
@@ -259,9 +259,9 @@ def test_retention_deletes_files_older_than_7_days(tmp_path: Path) -> None:
 
     # Pre-populate backups: a "very old" (10 days), a "boundary" (8 days),
     # a "fresh" (3 days), and a non-matching file.
-    very_old = backup_dir / "amc-2020-01-01.db"
-    boundary = backup_dir / "amc-2020-02-02.db"
-    fresh = backup_dir / "amc-2020-03-03.db"
+    very_old = backup_dir / "amg-2020-01-01.db"
+    boundary = backup_dir / "amg-2020-02-02.db"
+    fresh = backup_dir / "amg-2020-03-03.db"
     unrelated = backup_dir / "do-not-touch.txt"
 
     for f in (very_old, boundary, fresh):
@@ -284,12 +284,12 @@ def test_retention_deletes_files_older_than_7_days(tmp_path: Path) -> None:
     assert unrelated.exists(), "non-matching files must not be touched"
 
     # Today's backup is also present.
-    today = backup_dir / f"amc-{_today_stamp()}.db"
+    today = backup_dir / f"amg-{_today_stamp()}.db"
     assert today.is_file()
 
 
 def test_retention_logs_pruned_count(tmp_path: Path) -> None:
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
     log_dir = tmp_path / "logs"
     backup_dir = tmp_path / "backups"
@@ -297,7 +297,7 @@ def test_retention_logs_pruned_count(tmp_path: Path) -> None:
 
     now = time.time()
     day = 86400
-    old = backup_dir / "amc-2020-01-01.db"
+    old = backup_dir / "amg-2020-01-01.db"
     old.write_bytes(b"\x00" * 16)
     os.utime(old, (now - 30 * day, now - 30 * day))
 
@@ -330,14 +330,14 @@ def test_missing_source_db_logs_error_and_exits_nonzero(tmp_path: Path) -> None:
     assert "source DB missing" in log_text
     # No backup file should be produced.
     if backup_dir.exists():
-        assert not list(backup_dir.glob("amc-*.db"))
+        assert not list(backup_dir.glob("amg-*.db"))
 
 
 def test_backup_dir_creation_failure_logs_error(tmp_path: Path) -> None:
     """If the backup-dir path exists as a regular file, mkdir -p fails;
     the script must surface this clearly.
     """
-    db_path = tmp_path / "amc.db"
+    db_path = tmp_path / "amg.db"
     _seed_db(db_path)
     log_dir = tmp_path / "logs"
     # Put a regular file where the backup dir should go.

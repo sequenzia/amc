@@ -1,4 +1,4 @@
-"""Tests for amc.core.logging — JSON output + redaction + rotation + fallback."""
+"""Tests for amg.core.logging — JSON output + redaction + rotation + fallback."""
 
 from __future__ import annotations
 
@@ -13,8 +13,8 @@ from pathlib import Path
 import pytest
 import structlog
 
-from amc.core import logging as amc_logging
-from amc.core.logging import (
+from amg.core import logging as amg_logging
+from amg.core.logging import (
     DEFAULT_LOG_DIR,
     LOG_FILE_PREFIX,
     REDACTED,
@@ -80,12 +80,12 @@ def test_resolve_log_dir_uses_default_when_unset():
 
 
 def test_resolve_log_dir_honors_env_var(tmp_path):
-    result = resolve_log_dir(env={"AMC_LOG_DIR": str(tmp_path)})
+    result = resolve_log_dir(env={"AMG_LOG_DIR": str(tmp_path)})
     assert result == tmp_path
 
 
 def test_resolve_log_dir_expands_tilde():
-    result = resolve_log_dir(env={"AMC_LOG_DIR": "~/somewhere"})
+    result = resolve_log_dir(env={"AMG_LOG_DIR": "~/somewhere"})
     assert "~" not in str(result)
     assert result.is_absolute()
 
@@ -105,7 +105,7 @@ def test_configure_logging_creates_log_directory(tmp_path):
 
 def test_configure_logging_writes_to_configured_directory(tmp_path):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     log.info("hello", foo="bar")
     info["file_handler"].flush()
 
@@ -122,7 +122,7 @@ def test_configure_logging_writes_to_configured_directory(tmp_path):
 
 def test_every_log_line_is_valid_json_with_standard_shape(tmp_path):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     log.info("startup", component="adapter")
     log.warning("close call", component="webhook", retries=3)
     info["file_handler"].flush()
@@ -144,7 +144,7 @@ def test_every_log_line_is_valid_json_with_standard_shape(tmp_path):
 
 def test_exception_logging_uses_format_exc_info(tmp_path):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     try:
         raise RuntimeError("boom")
     except RuntimeError:
@@ -168,11 +168,11 @@ def test_exception_logging_uses_format_exc_info(tmp_path):
     [
         "Authorization",
         "authorization",
-        "X-AMC-Signature",
-        "x-amc-signature",
+        "X-AMG-Signature",
+        "x-amg-signature",
         "password",
         "bearer",
-        "AMC_BEARER_TOKEN",
+        "AMG_BEARER_TOKEN",
         "discord_bot_token",
         "webhook_secret",
         "api_secret",
@@ -180,7 +180,7 @@ def test_exception_logging_uses_format_exc_info(tmp_path):
 )
 def test_redactor_scrubs_secret_keys_top_level(tmp_path, key):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     log.info("auth", **{key: "supersecret-value"})
     info["file_handler"].flush()
 
@@ -191,11 +191,11 @@ def test_redactor_scrubs_secret_keys_top_level(tmp_path, key):
 
 def test_redactor_scrubs_authorization_and_signature_in_headers_dict(tmp_path):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     headers = {
         "Authorization": "Bearer abc123",
-        "X-AMC-Signature": "sha256=deadbeef",
-        "User-Agent": "amc/0.1",
+        "X-AMG-Signature": "sha256=deadbeef",
+        "User-Agent": "amg/0.1",
     }
     log.info("incoming", headers=headers)
     info["file_handler"].flush()
@@ -203,8 +203,8 @@ def test_redactor_scrubs_authorization_and_signature_in_headers_dict(tmp_path):
     [entry] = _read_log_lines(tmp_path)
     h = entry["headers"]
     assert h["Authorization"] == REDACTED
-    assert h["X-AMC-Signature"] == REDACTED
-    assert h["User-Agent"] == "amc/0.1"
+    assert h["X-AMG-Signature"] == REDACTED
+    assert h["User-Agent"] == "amg/0.1"
     raw = json.dumps(entry)
     assert "Bearer abc123" not in raw
     assert "deadbeef" not in raw
@@ -212,7 +212,7 @@ def test_redactor_scrubs_authorization_and_signature_in_headers_dict(tmp_path):
 
 def test_redactor_walks_nested_dicts_recursively(tmp_path):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     payload = {
         "request": {
             "headers": {
@@ -245,10 +245,10 @@ def test_redactor_walks_nested_dicts_recursively(tmp_path):
 
 def test_redactor_scans_lists_of_header_dicts(tmp_path):
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     headers_list = [
         {"name": "Authorization", "value": "Bearer xyz"},
-        {"name": "X-AMC-Signature", "value": "sha256=cafefood"},
+        {"name": "X-AMG-Signature", "value": "sha256=cafefood"},
         {"name": "Accept", "value": "*/*"},
         {"password": "p4ss"},
     ]
@@ -305,7 +305,7 @@ def test_daily_rotation_handler_configured_for_midnight(tmp_path):
 def test_daily_rotation_produces_new_file(tmp_path):
     """Force a rotation by calling doRollover() — handler creates a fresh file."""
     info = configure_logging(log_dir=tmp_path)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     log.info("before-rotation")
     info["file_handler"].flush()
     before_files = set(tmp_path.glob(f"{LOG_FILE_PREFIX}-*"))
@@ -341,7 +341,7 @@ def test_fallback_to_stdout_when_log_dir_unwritable(tmp_path, monkeypatch):
     err = io.StringIO()
     out = io.StringIO()
     info = configure_logging(log_dir=bogus, stderr=err, stdout=out)
-    log = structlog.get_logger("amc.test")
+    log = structlog.get_logger("amg.test")
     log.info("post-fallback", phase="boot")
 
     assert info["fallback"] is True
@@ -360,12 +360,12 @@ def test_fallback_to_stdout_when_log_dir_unwritable(tmp_path, monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# AMC_LOG_DIR env integration
+# AMG_LOG_DIR env integration
 # ---------------------------------------------------------------------------
 
 
-def test_configure_logging_picks_up_amc_log_dir_env(tmp_path, monkeypatch):
-    monkeypatch.setenv("AMC_LOG_DIR", str(tmp_path))
+def test_configure_logging_picks_up_amg_log_dir_env(tmp_path, monkeypatch):
+    monkeypatch.setenv("AMG_LOG_DIR", str(tmp_path))
     info = configure_logging()
     assert info["log_dir"] == tmp_path
 
@@ -483,17 +483,17 @@ async def test_request_middleware_records_500_on_exception(tmp_path):
 
 
 def test_module_public_api():
-    assert hasattr(amc_logging, "configure_logging")
-    assert hasattr(amc_logging, "install_request_logging")
-    assert hasattr(amc_logging, "RedactingProcessor")
-    assert hasattr(amc_logging, "resolve_log_dir")
-    assert amc_logging.DEFAULT_LOG_DIR == "~/Library/Logs/messaging-agent"
-    assert amc_logging.REDACTED == "[REDACTED]"
+    assert hasattr(amg_logging, "configure_logging")
+    assert hasattr(amg_logging, "install_request_logging")
+    assert hasattr(amg_logging, "RedactingProcessor")
+    assert hasattr(amg_logging, "resolve_log_dir")
+    assert amg_logging.DEFAULT_LOG_DIR == "~/Library/Logs/messaging-agent"
+    assert amg_logging.REDACTED == "[REDACTED]"
 
 
-def test_amc_log_dir_default_matches_spec():
+def test_amg_log_dir_default_matches_spec():
     """Spec §11.3 — logs land at ~/Library/Logs/messaging-agent."""
-    # Simulate fresh env without AMC_LOG_DIR.
-    env = {k: v for k, v in os.environ.items() if k != "AMC_LOG_DIR"}
+    # Simulate fresh env without AMG_LOG_DIR.
+    env = {k: v for k, v in os.environ.items() if k != "AMG_LOG_DIR"}
     result = resolve_log_dir(env=env)
     assert result == Path("~/Library/Logs/messaging-agent").expanduser()

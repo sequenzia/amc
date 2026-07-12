@@ -46,7 +46,7 @@ Build acceptance is fully autonomous. Replace every human-in-the-loop gate with 
 - **Reproducibility.** Phase 0 fixtures are deterministic (frozen `chat.db` builder, stable seeded rows, fixed UUIDs/ULIDs/timestamps) so failures are diagnosable from logs alone.
 - **No real platform side effects during build.** Nothing the build does sends a real iMessage or a real Discord message — safe to run as often as desired.
 - **Crash + relaunch path is exercised.** The bounded stability run includes a forced restart and verifies `connector_state` resumes correctly. Previously this was implicit in the 7-day soak.
-- **The same fakes are reusable for development.** Anyone working on AMC can develop and test locally without touching real Discord or iMessage.
+- **The same fakes are reusable for development.** Anyone working on AMG can develop and test locally without touching real Discord or iMessage.
 
 ### Negative
 
