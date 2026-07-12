@@ -35,6 +35,7 @@ Technical Constraints.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import socket
 import subprocess
@@ -42,7 +43,7 @@ import sys
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import IO
+from typing import IO, Final
 
 from amg.cli.launchctl import DOMAIN
 from amg.cli.output import render_table
@@ -56,11 +57,13 @@ __all__ = [
     "ENV_PATH",
     "CHAT_DB_PATH",
     "LAUNCH_AGENTS_DIR",
+    "LEGACY_ENV_PREFIX",
     "LOG_DIR",
     "ADAPTER_PORT",
     "RECEIVER_PORT",
     "check_uv_on_path",
     "check_env_file",
+    "check_no_legacy_env_keys",
     "check_chat_db_readable",
     "check_plist_templates_exist",
     "check_plists_installed",
@@ -86,6 +89,11 @@ LOG_DIR: Path = Path("~/Library/Logs/messaging-agent").expanduser()
 
 ADAPTER_PORT: int = 8080
 RECEIVER_PORT: int = 8090
+
+# Env keys left over from the AMC name. The optional leading underscore catches
+# ``_AMC_COMPLETE`` from a shell completion installed under the old CLI name.
+LEGACY_ENV_PREFIX: Final[re.Pattern[str]] = re.compile(r"^_?AMC_")
+_MAX_LISTED_LEGACY_KEYS: Final[int] = 6
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +173,61 @@ def check_env_file() -> tuple[str, str]:
     if not os.access(ENV_PATH, os.R_OK):
         return _FAIL, f"not readable: {ENV_PATH}"
     return _OK, f"readable at {ENV_PATH}"
+
+
+def check_no_legacy_env_keys() -> tuple[str, str]:
+    """Return ``fail`` if any ``AMC_*`` key survives from before the rename.
+
+    The project was renamed from Agent Messaging Channel to Agent Messaging
+    Gateway, and ``AMC_*`` is **ignored, not aliased** — there is no
+    back-compat shim. That makes a half-migrated ``.env`` dangerous rather
+    than merely wrong: only ``AMG_BEARER_TOKEN`` fails loudly when absent, so
+    an operator who renames the one key the boot error names gets an adapter
+    that starts green while ``AMG_WEBHOOK_URL`` is still unset — webhook
+    delivery silently disabled, and the agent never replies to anything.
+
+    Matching is on the ``AMC_`` prefix rather than a list of known keys: the
+    list drifts as vars are added, the prefix does not. The optional leading
+    underscore also catches ``_AMC_COMPLETE``, left behind by a shell
+    completion installed under the old CLI name.
+
+    Both the env file and the process environment are scanned — the latter
+    catches a stale ``export`` in a shell profile or a launchd
+    ``EnvironmentVariables`` block, which the file alone would miss.
+
+    Key **names** are reported, never values: the live ``.env`` holds the
+    bearer token, the webhook HMAC secret, and the Discord bot token.
+    """
+    found: set[str] = set()
+
+    # A missing or unreadable env file is check_env_file's business; stay quiet
+    # here so one broken file does not produce two redundant failure rows.
+    try:
+        contents = ENV_PATH.read_text(encoding="utf-8")
+    except OSError:
+        contents = ""
+    for raw in contents.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        key = line.split("=", 1)[0].strip().removeprefix("export ").strip()
+        if LEGACY_ENV_PREFIX.match(key):
+            found.add(key)
+
+    found.update(key for key in os.environ if LEGACY_ENV_PREFIX.match(key))
+
+    if not found:
+        return _OK, f"no AMC_* keys in {ENV_PATH} or the environment"
+
+    keys = sorted(found)
+    shown = ", ".join(keys[:_MAX_LISTED_LEGACY_KEYS])
+    if len(keys) > _MAX_LISTED_LEGACY_KEYS:
+        shown += f" (+{len(keys) - _MAX_LISTED_LEGACY_KEYS} more)"
+    return (
+        _FAIL,
+        f"{len(keys)} legacy key(s) still set: {shown} — AMC_* is ignored, not aliased. "
+        f"Rename them to AMG_* in {ENV_PATH}.",
+    )
 
 
 def check_chat_db_readable() -> tuple[str, str]:
@@ -375,6 +438,7 @@ def _probe_port_in_use(port: int, *, host: str = "127.0.0.1", timeout: float = 0
 DEFAULT_CHECKS: tuple[tuple[str, CheckFn], ...] = (
     ("uv on PATH", check_uv_on_path),
     ("env file readable", check_env_file),
+    ("no legacy AMC_* env keys", check_no_legacy_env_keys),
     ("chat.db readable (FDA)", check_chat_db_readable),
     ("plist templates present", check_plist_templates_exist),
     ("plists installed", check_plists_installed),
